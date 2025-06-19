@@ -13,7 +13,8 @@ dotenv = "2.2.4"
 logback = "1.5.6"
 
 [libraries]
-kotlin = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8" }
+kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib" }
+kotlin-stdlib-jdk8 = { module = "org.jetbrains.kotlin:kotlin-stdlib-jdk8" }
 kotlinx-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlin-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 

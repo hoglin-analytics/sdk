@@ -66,7 +66,7 @@ class Hoglin private constructor(
     }
 
     class Builder(private val serverKey: String) {
-        private var baseUrl = "http://localhost:3000"
+        private var baseUrl = "https://api.hoglin.gg"
         private var autoFlushInterval = 30_000L
         private var maxBatchSize = 1_000
         private var enableAutoFlush = true
