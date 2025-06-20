@@ -233,6 +233,10 @@ class Hoglin private constructor(
         }
     }
 
+    fun flushSync(): FlushResult {
+        return runBlocking { flush() }
+    }
+
     /**
      * Gracefully stops all SDK events
      *
