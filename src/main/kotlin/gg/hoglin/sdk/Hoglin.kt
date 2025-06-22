@@ -24,6 +24,7 @@ import com.github.kittinunf.fuel.Fuel
 import com.github.kittinunf.fuel.core.extensions.jsonBody
 import com.github.kittinunf.fuel.coroutines.awaitStringResponseResult
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
@@ -59,7 +60,8 @@ class Hoglin private constructor(
     private val baseUrl: String,
     private val autoFlushInterval: Long,
     private val maxBatchSize: Int,
-    private val enableAutoFlush: Boolean
+    enableAutoFlush: Boolean,
+    private val gson: Gson
 ) {
     companion object {
         private val logger = LoggerFactory.getLogger(Hoglin::class.java)
@@ -71,15 +73,42 @@ class Hoglin private constructor(
         private var maxBatchSize = 1_000
         private var enableAutoFlush = true
 
+        private val customSerializers = mutableListOf<Pair<Class<*>, Any>>()
+
         fun baseUrl(url: String) = apply { this.baseUrl = url }
         fun autoFlushInterval(interval: Long) = apply { this.autoFlushInterval = interval }
         fun maxBatchSize(size: Int) = apply { this.maxBatchSize = size }
         fun enableAutoFlush(enabled: Boolean) = apply { this.enableAutoFlush = enabled }
 
-        fun build() = Hoglin(serverKey, baseUrl, autoFlushInterval, maxBatchSize, enableAutoFlush)
+        /**
+         * Register a custom type adapter (serializer) for Gson.
+         *
+         * @param type The class type to register the adapter for.
+         * @param adapter The serializer
+         */
+        fun <T> registerSerializer(type: Class<T>, adapter: Any) = apply {
+            customSerializers.add(type to adapter)
+        }
+
+        fun build(): Hoglin {
+            val gsonBuilder = GsonBuilder()
+
+            for ((type, adapter) in customSerializers) {
+                gsonBuilder.registerTypeAdapter(type, adapter)
+            }
+
+            val gson = gsonBuilder.create()
+            return Hoglin(
+                serverKey,
+                baseUrl,
+                autoFlushInterval,
+                maxBatchSize,
+                enableAutoFlush,
+                gson
+            )
+        }
     }
 
-    private val gson = Gson()
     private val eventQueue = ConcurrentLinkedQueue<AnalyticsEvent>()
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val isShuttingDown = AtomicBoolean(false)

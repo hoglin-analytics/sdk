@@ -23,6 +23,7 @@ import gg.hoglin.sdk.Hoglin
 import io.github.cdimascio.dotenv.Dotenv
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
+import java.util.UUID
 
 fun main() = runBlocking {
     val logger = LoggerFactory.getLogger("HoglinExample")
@@ -34,7 +35,7 @@ fun main() = runBlocking {
     logger.info("Starting Hoglin SDK example")
 
     val analytics = Hoglin.Builder(dotenv["HOGLIN_SECRET_KEY"])
-        .baseUrl("http://localhost:3000")
+        .baseUrl("http://localhost:3100")
         .autoFlushInterval(5_000L)
         .maxBatchSize(50)
         .enableAutoFlush(true)
@@ -49,6 +50,7 @@ fun main() = runBlocking {
     analytics.track("player_action", mapOf(
         "action" to "block_place",
         "block_type" to "stone",
+        "player_uuid" to UUID.fromString("e23e702e-6aff-4a82-b830-0c74f80b9ab9")
     ))
 
     logger.info("Waiting for flush....")
