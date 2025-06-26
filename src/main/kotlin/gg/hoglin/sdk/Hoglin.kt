@@ -29,6 +29,7 @@ import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -48,6 +49,10 @@ data class ApiErrorResponse(
     val error: String,
     val details: List<ErrorDetail>? = null,
     val message: String? = null
+)
+
+data class ExperimentEvaluationResponse(
+    val inExperiment: Boolean
 )
 
 sealed class FlushResult {
@@ -174,6 +179,71 @@ class Hoglin private constructor(
     }
 
     /**
+     * Checks if a player is in an experiment asynchronously
+     *
+     * @param experimentId - The experiment ID to check
+     * @param playerUUID - The player UUID (null for non-player-specific rollout)
+     * @param callback - Callback function that receives the result (true if in experiment, false otherwise)
+     */
+    fun hasExperiment(experimentId: String, playerUUID: UUID?, callback: (Boolean) -> Unit) {
+        coroutineScope.launch {
+            val result = internalEvaluateExperiment(experimentId, playerUUID)
+            callback(result)
+        }
+    }
+
+    fun hasExperimentSync(experimentId: String, playerUUID: UUID? = null): Boolean =
+        runBlocking { internalEvaluateExperiment(experimentId, playerUUID) }
+
+    /**
+     * Overloaded version for non-player-specific experiments
+     */
+    fun hasExperiment(experimentId: String, callback: (Boolean) -> Unit) = hasExperiment(experimentId, null, callback)
+
+    private suspend fun internalEvaluateExperiment(experimentId: String, playerUUID: UUID?): Boolean {
+        if (isShuttingDown.get()) {
+            logger.warn("Cannot evaluate experiment '{}', SDK is shutting down", experimentId)
+            return false
+        }
+
+        logger.debug("Evaluating experiment: experimentId={}, playerUUID={}", experimentId, playerUUID)
+
+        val url = buildString {
+            append("$baseUrl/experiments/$serverKey/$experimentId/evaluate")
+            if (playerUUID != null) {
+                append("?playerUUID=$playerUUID")
+            }
+        }
+
+        val (_, response, result) = Fuel.get(url).awaitStringResponseResult()
+
+        return result.fold(
+            success = { responseBody ->
+                try {
+                    val evaluationResponse = gson.fromJson(responseBody, ExperimentEvaluationResponse::class.java)
+                    logger.trace("Experiment evaluation successful: experimentId={}, inExperiment={}",
+                        experimentId, evaluationResponse.inExperiment)
+                    evaluationResponse.inExperiment
+                } catch (e: Exception) {
+                    logger.error("Failed to parse experiment evaluation response", e)
+                    false
+                }
+            },
+            failure = { error ->
+                val errorMessage = if (response.data.isNotEmpty()) {
+                    parseErrorResponse(String(response.data))
+                } else {
+                    error.message ?: "Network error"
+                }
+
+                logger.error("Failed to evaluate experiment '{}' (HTTP {}): {}",
+                    experimentId, response.statusCode, errorMessage)
+                false
+            }
+        )
+    }
+
+    /**
      * Parses an error response body
      */
     private fun parseErrorResponse(responseBody: String): String {
@@ -262,14 +332,12 @@ class Hoglin private constructor(
         }
     }
 
-    fun flushSync(): FlushResult {
-        return runBlocking { flush() }
-    }
+    fun flushSync(): FlushResult = runBlocking { flush() }
 
     /**
      * Gracefully stops all SDK events
      *
-     * - Cancels the auto flush j ob
+     * - Cancels the auto flush job
      * - Attempts to flush all remaining events
      */
     suspend fun shutdown() {
@@ -317,4 +385,3 @@ class Hoglin private constructor(
         runBlocking { shutdown() }
     }
 }
-

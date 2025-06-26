@@ -31,6 +31,7 @@ fun main() = runBlocking {
         .directory("src/test/resources")
         .filename(".env")
         .load()
+    val player = UUID.fromString("e23e702e-6aff-4a82-b830-0c74f80b9ab9")
 
     logger.info("Starting Hoglin SDK example")
 
@@ -50,8 +51,12 @@ fun main() = runBlocking {
     analytics.track("player_action", mapOf(
         "action" to "block_place",
         "block_type" to "stone",
-        "player_uuid" to UUID.fromString("e23e702e-6aff-4a82-b830-0c74f80b9ab9")
+        "player_uuid" to player
     ))
+
+    analytics.hasExperiment("new_kit", player) {
+        logger.info("Player is in experiment?: $it")
+    }
 
     logger.info("Waiting for flush....")
 
