@@ -1,0 +1,11 @@
+[versions]
+okhttp = "5.1.0"
+shadow = "8.3.0"
+lombok = "1.18.38"
+
+[plugins]
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+
+[libraries]
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
