@@ -13,8 +13,11 @@ repositories {
 }
 
 dependencies {
-    implementation(libs.okhttp)
+    implementation(libs.gson)
+    implementation(libs.unirest.core)
+    implementation(libs.unirest.gson)
     compileOnly(libs.lombok)
+    compileOnly(libs.jetbrains.annotations)
     annotationProcessor(libs.lombok)
 }
 

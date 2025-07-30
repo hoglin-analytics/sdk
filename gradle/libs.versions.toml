@@ -1,11 +1,16 @@
 [versions]
-okhttp = "5.1.0"
 shadow = "8.3.0"
 lombok = "1.18.38"
+gson = "2.13.1"
+unirest = "4.4.5"
+jetbrains-annotations = "24.0.0"
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
 
 [libraries]
-okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+unirest-core = { module = "com.konghq:unirest-java-core", version.ref = "unirest" }
+unirest-gson = { module = "com.konghq:unirest-modules-gson", version.ref = "unirest" }
+jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains-annotations" }
