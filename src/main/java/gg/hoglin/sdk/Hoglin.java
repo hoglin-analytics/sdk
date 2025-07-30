@@ -4,7 +4,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
+import okhttp3.OkHttpClient;
 import org.jetbrains.annotations.NotNull;
+import org.w3c.dom.ls.LSOutput;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -30,6 +32,11 @@ public class Hoglin {
     public static final ThreadFactory DEFAULT_THREAD_FACTORY = Thread.ofVirtual().name("Hoglin").factory();
 
     /**
+     * The API key for Hoglin
+     */
+    @NotNull private String apiKey;
+
+    /**
      * How often (ms) to send queued events
      */
     @Builder.Default private long autoFlushInterval = 30000;
@@ -53,5 +60,10 @@ public class Hoglin {
      * The executor used to create threads for Hoglin
      */
     @Builder.Default @NotNull private ScheduledExecutorService executor = Executors.newScheduledThreadPool(0, DEFAULT_THREAD_FACTORY);
+
+    /**
+     * The OkHttpClient used for making HTTP requests
+     */
+    @Builder.Default @NotNull private OkHttpClient okHttpClient = new OkHttpClient(new OkHttpClient.Builder());
 
 }
