@@ -5,33 +5,28 @@ import com.google.gson.GsonBuilder;
 import gg.hoglin.sdk.models.analytic.Analytic;
 import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
-import gg.hoglin.sdk.serialzation.InstantSerializer;
+import gg.hoglin.sdk.serialzation.HoglinAdapter;
+import gg.hoglin.sdk.task.FlushTask;
+import kong.unirest.core.HttpResponse;
 import kong.unirest.core.Unirest;
 import kong.unirest.core.UnirestInstance;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.ToString;
+import lombok.*;
 import lombok.experimental.Accessors;
+import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
-import java.util.Collections;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
+import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * Builder for Hoglin instance
  */
-@Builder(builderMethodName = "")
+@Builder(builderMethodName = "", buildMethodName = "_build")
 @Accessors(fluent = true)
 @Getter
 @ToString
 public class Hoglin {
-
     /**
      * The default API endpoint for Hoglin
      */
@@ -81,6 +76,18 @@ public class Hoglin {
     @Builder.Default @NotNull private UnirestInstance httpClient = Unirest.primaryInstance();
 
     /**
+     * The Gson instance used for serialization and deserialization
+     */
+    @ToString.Exclude
+    @Builder.Default @NotNull private Gson gson = createDefaultGson();
+
+    private final Queue<RecordedAnalytic<?>> eventQueue = new LinkedList<>();
+
+    private void init() {
+        executor.scheduleAtFixedRate(new FlushTask(this), autoFlushInterval, autoFlushInterval, TimeUnit.MILLISECONDS);
+    }
+
+    /**
      * Creates a new Hoglin instance with the provided API key.
      *
      * @param apiKey The API key for Hoglin
@@ -88,6 +95,31 @@ public class Hoglin {
      */
     static HoglinBuilder builder(@NotNull String apiKey) {
         return new HoglinBuilder().serverKey(apiKey);
+    }
+
+    /**
+     * Flushes the event queue immediately. This method is typically used to ensure that all pending events are sent
+     * to the Hoglin API without waiting for the auto-flush interval and being limited by the max batch size
+     *
+     * @apiNote This method is blocking
+     */
+    @Blocking
+    public void flush() {
+        int take = eventQueue.size();
+        if (take == 0) {
+            return; // No events to flush
+        }
+
+        ArrayList<RecordedAnalytic<?>> events = new ArrayList<>(eventQueue);
+        eventQueue.clear();
+
+        HttpResponse<String> response = Unirest.put(baseUrl + "/analytics/" + serverKey)
+            .header("accept", "application/json")
+            .header("Content-Type", "application/json")
+            .body(gson.toJson(events))
+            .asString();
+
+        System.out.println(response.getBody());
     }
 
     /**
@@ -141,17 +173,24 @@ public class Hoglin {
      * @param analytic the recorded analytic event to track
      */
     public void track(RecordedAnalytic<?> analytic) {
-        Gson gson = new GsonBuilder()
-            .registerTypeAdapter(Instant.class, new InstantSerializer())
-            .create();
+        eventQueue.add(analytic);
+    }
 
-        String json = gson.toJson(analytic);
+    private static Gson createDefaultGson() {
+        final GsonBuilder builder = new GsonBuilder();
+        ServiceLoader<HoglinAdapter> adapters = ServiceLoader.load(HoglinAdapter.class, Hoglin.class.getClassLoader());
+        for (HoglinAdapter adapter : adapters) {
+            builder.registerTypeAdapter(adapter.getType(), adapter);
+        }
+        return builder.create();
+    }
 
-        Unirest.put(baseUrl + "/analytics/" + serverKey)
-            .header("accept", "application/json")
-            .header("Content-Type", "application/json")
-            .body(json)
-            .asEmpty();
+    public static class HoglinBuilder {
+        public Hoglin build() {
+            final Hoglin hoglin = _build();
+            hoglin.init();
+            return hoglin;
+        }
     }
 }
 
@@ -167,21 +206,20 @@ class PlayerJoin implements NamedAnalytic {
     }
 }
 
-@AllArgsConstructor
-class PlayerJoin2 implements Analytic {
-    private UUID uuid;
-    private String hostname;
-}
-
 class Test {
 
+    @SneakyThrows
     public static void main(String[] args) {
-        Hoglin hoglin = Hoglin.builder("meow")
+        Hoglin hoglin = Hoglin.builder("server_01jyfsbg7ye07ambq0rtryt2t6")
+            .maxBatchSize(5)
+            .autoFlushInterval(1000)
             .build();
 
-        hoglin.track(new PlayerJoin(UUID.randomUUID(), "meowmeow.com"));
-        hoglin.track("player_join", new PlayerJoin2(UUID.randomUUID(), "meowmeow.com"));
+        for (int i = 0; i < 60000; i++) {
+            hoglin.track("test_event", new PlayerJoin(UUID.randomUUID(), "meowmeow.com"));
+        }
 
+        hoglin.flush();
     }
 
 }

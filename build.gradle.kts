@@ -18,7 +18,9 @@ dependencies {
     implementation(libs.unirest.gson)
     compileOnly(libs.lombok)
     compileOnly(libs.jetbrains.annotations)
+    compileOnly(libs.autoservice)
     annotationProcessor(libs.lombok)
+    annotationProcessor(libs.autoservice)
 }
 
 tasks.build {
