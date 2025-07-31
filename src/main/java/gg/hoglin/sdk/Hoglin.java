@@ -5,22 +5,24 @@ import com.google.gson.GsonBuilder;
 import gg.hoglin.sdk.models.analytic.Analytic;
 import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
+import gg.hoglin.sdk.models.error.ApiErrorResponse;
+import gg.hoglin.sdk.models.experiment.ExperimentEvaluation;
 import gg.hoglin.sdk.serialzation.HoglinAdapter;
 import gg.hoglin.sdk.task.FlushTask;
-import kong.unirest.core.HttpResponse;
-import kong.unirest.core.Unirest;
-import kong.unirest.core.UnirestInstance;
+import kong.unirest.core.*;
 import lombok.*;
 import lombok.experimental.Accessors;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.logging.Logger;
 
 /**
- * Builder for Hoglin instance
+ * Hoglin instance
  */
 @Builder(builderMethodName = "", buildMethodName = "_build")
 @Accessors(fluent = true)
@@ -36,6 +38,12 @@ public class Hoglin {
      * The default thread factory for Hoglin
      */
     public static final ThreadFactory DEFAULT_THREAD_FACTORY = Thread.ofVirtual().name("Hoglin").factory();
+
+    /**
+     * The logger used for Hoglin
+     */
+    public final Logger logger = Logger.getLogger("Hoglin");
+
 
     /**
      * The server key for Hoglin
@@ -102,24 +110,22 @@ public class Hoglin {
      * to the Hoglin API without waiting for the auto-flush interval and being limited by the max batch size
      *
      * @apiNote This method is blocking
+     * @return The {@link HttpResponse} from the Hoglin API, or null if there are no queued events (no request would've
+     * been made)
      */
     @Blocking
-    public void flush() {
-        int take = eventQueue.size();
-        if (take == 0) {
-            return; // No events to flush
-        }
+    public @Nullable HttpResponse<String> flush() {
+        final int take = eventQueue.size();
+        if (take == 0) return null; // No events to flush
 
-        ArrayList<RecordedAnalytic<?>> events = new ArrayList<>(eventQueue);
+        final ArrayList<RecordedAnalytic<?>> events = new ArrayList<>(eventQueue);
         eventQueue.clear();
 
-        HttpResponse<String> response = Unirest.put(baseUrl + "/analytics/" + serverKey)
+        return Unirest.put(baseUrl + "/analytics/" + serverKey)
             .header("accept", "application/json")
             .header("Content-Type", "application/json")
             .body(gson.toJson(events))
             .asString();
-
-        System.out.println(response.getBody());
     }
 
     /**
@@ -176,10 +182,38 @@ public class Hoglin {
         eventQueue.add(analytic);
     }
 
+    public boolean getExperiment(final String experimentId) {
+        return getExperiment(experimentId, null);
+    }
+
+    public boolean getExperiment(final String experimentId, @Nullable final UUID playerUUID) {
+        final GetRequest request = Unirest.get(baseUrl + "/experiments/" + serverKey + "/" + experimentId + "/evaluate")
+            .header("accept", "application/json")
+            .header("Content-Type", "application/json");
+
+        if (playerUUID != null) {
+            request.queryString("playerUUID", playerUUID.toString());
+        }
+
+        final HttpResponse<String> response = request.asString();
+        if (!response.isSuccess()) {
+            final ApiErrorResponse error = gson.fromJson(response.getBody(), ApiErrorResponse.class);
+
+            logger.severe("Failed to evaluate experiment '%s', defaulting to false. (HTTP %s) %s".formatted(
+                experimentId, response.getStatus(), error.parsedDescription()
+            ));
+            return false;
+        }
+
+        final ExperimentEvaluation evaluation = gson.fromJson(response.getBody(), ExperimentEvaluation.class);
+        return evaluation.isInExperiment();
+    }
+
+    @SuppressWarnings("rawtypes")
     private static Gson createDefaultGson() {
         final GsonBuilder builder = new GsonBuilder();
-        ServiceLoader<HoglinAdapter> adapters = ServiceLoader.load(HoglinAdapter.class, Hoglin.class.getClassLoader());
-        for (HoglinAdapter adapter : adapters) {
+        final ServiceLoader<HoglinAdapter> adapters = ServiceLoader.load(HoglinAdapter.class, Hoglin.class.getClassLoader());
+        for (final HoglinAdapter adapter : adapters) {
             builder.registerTypeAdapter(adapter.getType(), adapter);
         }
         return builder.create();
@@ -194,32 +228,4 @@ public class Hoglin {
     }
 }
 
-@AllArgsConstructor
-class PlayerJoin implements NamedAnalytic {
-    private UUID uuid;
-    private String hostname;
 
-    @NotNull
-    @Override
-    public String getEventType() {
-        return "player_join";
-    }
-}
-
-class Test {
-
-    @SneakyThrows
-    public static void main(String[] args) {
-        Hoglin hoglin = Hoglin.builder("server_01jyfsbg7ye07ambq0rtryt2t6")
-            .maxBatchSize(5)
-            .autoFlushInterval(1000)
-            .build();
-
-        for (int i = 0; i < 60000; i++) {
-            hoglin.track("test_event", new PlayerJoin(UUID.randomUUID(), "meowmeow.com"));
-        }
-
-        hoglin.flush();
-    }
-
-}

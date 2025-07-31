@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import java.util.ArrayList;
 
 /**
- * skibidi toilet
+ * A task responsible for flushing a batch of events from the event queue to the Hoglin API.
  */
 @RequiredArgsConstructor
 public class FlushTask implements Runnable {

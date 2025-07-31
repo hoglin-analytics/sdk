@@ -7,7 +7,9 @@ import org.jetbrains.annotations.NotNull;
  * adds a method to retrieve the event type. Ensure that your implementations are serializable with GSON.
  */
 public interface NamedAnalytic extends Analytic {
-
+    /**
+     * Retrieves the type of the analytic event.
+     * @return the event type as a non-null string
+     */
     @NotNull String getEventType();
-
 }
