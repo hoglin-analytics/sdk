@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.time.Instant;
 
 @AutoService(HoglinAdapter.class)
-@SuppressWarnings("rawtypes") // Suppresses compile-time warning
 public class InstantSerializer extends HoglinAdapter<Instant> {
     @Override
     public void write(JsonWriter out, Instant value) throws IOException {

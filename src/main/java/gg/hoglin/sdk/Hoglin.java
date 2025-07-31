@@ -2,6 +2,7 @@ package gg.hoglin.sdk;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
 import gg.hoglin.sdk.models.analytic.Analytic;
 import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
@@ -121,11 +122,13 @@ public class Hoglin {
         final ArrayList<RecordedAnalytic<?>> events = new ArrayList<>(eventQueue);
         eventQueue.clear();
 
-        return Unirest.put(baseUrl + "/analytics/" + serverKey)
+        HttpResponse<String> response = Unirest.put(baseUrl + "/analytics/" + serverKey)
             .header("accept", "application/json")
             .header("Content-Type", "application/json")
             .body(gson.toJson(events))
             .asString();
+
+        return response;
     }
 
     /**
@@ -182,11 +185,27 @@ public class Hoglin {
         eventQueue.add(analytic);
     }
 
+    /**
+     * Evaluates whether the server is part of the specified experiment (the experiment rollout must be 100%)
+     * @param experimentId the ID of the experiment to evaluate
+     * @return true if the server is part of the experiment, false otherwise
+     * @see #getExperiment(String, UUID)
+     */
     public boolean getExperiment(final String experimentId) {
-        return getExperiment(experimentId, null);
+        return evaluateExperiment(experimentId, null);
     }
 
-    public boolean getExperiment(final String experimentId, @Nullable final UUID playerUUID) {
+    /**
+     * Evaluates whether the player is part of the specified experiment for a specific player.
+     * @param experimentId the ID of the experiment to evaluate
+     * @param playerUUID the UUID of the player to evaluate the experiment for
+     * @return true if the player is part of the experiment, false otherwise
+     */
+    public boolean getExperiment(final String experimentId, @NotNull final UUID playerUUID) {
+        return evaluateExperiment(experimentId, playerUUID);
+    }
+
+    private boolean evaluateExperiment(final String experimentId, @Nullable final UUID playerUUID) {
         final GetRequest request = Unirest.get(baseUrl + "/experiments/" + serverKey + "/" + experimentId + "/evaluate")
             .header("accept", "application/json")
             .header("Content-Type", "application/json");
@@ -197,16 +216,25 @@ public class Hoglin {
 
         final HttpResponse<String> response = request.asString();
         if (!response.isSuccess()) {
-            final ApiErrorResponse error = gson.fromJson(response.getBody(), ApiErrorResponse.class);
-
-            logger.severe("Failed to evaluate experiment '%s', defaulting to false. (HTTP %s) %s".formatted(
-                experimentId, response.getStatus(), error.parsedDescription()
-            ));
-            return false;
+                logger.severe("Failed to evaluate experiment '%s', defaulting to false. %s".formatted(
+                    experimentId, contructErrorDescription(response)));
+                return false;
         }
 
         final ExperimentEvaluation evaluation = gson.fromJson(response.getBody(), ExperimentEvaluation.class);
         return evaluation.isInExperiment();
+    }
+
+    public String contructErrorDescription(final HttpResponse<String> response) {
+        final String httpStatus = "(HTTP " + response.getStatus()+ "): ";
+        try {
+            final ApiErrorResponse error = gson.fromJson(response.getBody(), ApiErrorResponse.class);
+            return httpStatus + error.parsedDescription();
+        } catch (final JsonSyntaxException e) {
+            return httpStatus + "Received unstructured error response: " + response.getBody();
+        } catch (final Exception e) {
+            return httpStatus + "An unexpected error occurred while processing the response: " + response + " e: " + e.getMessage();
+        }
     }
 
     @SuppressWarnings("rawtypes")

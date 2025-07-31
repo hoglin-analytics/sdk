@@ -8,7 +8,6 @@ import com.google.gson.TypeAdapter;
  * @see InstantSerializer
  * @param <T> the type of object this adapter handles
  */
-@SuppressWarnings("rawtypes") // Suppresses compile-time warning
 public abstract class HoglinAdapter<T> extends TypeAdapter<T> {
 
     /**
