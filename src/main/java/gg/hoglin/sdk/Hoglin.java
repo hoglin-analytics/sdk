@@ -225,6 +225,12 @@ public class Hoglin {
         return evaluation.isInExperiment();
     }
 
+    /**
+     * Constructs a human-readable error description from the given HTTP response.
+     *
+     * @param response the HTTP response containing the error
+     * @return a string description of the error, including the HTTP status and any parsed error details
+     */
     public String contructErrorDescription(final HttpResponse<String> response) {
         final String httpStatus = "(HTTP " + response.getStatus()+ "): ";
         try {

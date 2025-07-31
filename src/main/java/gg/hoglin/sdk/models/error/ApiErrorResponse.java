@@ -6,12 +6,22 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Represents an error response from the Hoglin API.
+ * Contains an error code, optional details about the error, and an optional message.
+ */
 @Data
 public class ApiErrorResponse {
     private final String error;
     private final @Nullable List<ApiErrorDetail> details;
     private final @Nullable String message;
 
+    /**
+     * Constructs a human-readable description of the error.
+     * This includes the error code, message, and details if available.
+     *
+     * @return A string representation of the error response.
+     */
     public String parsedDescription() {
         final StringBuilder result = new StringBuilder(error);
         if (message != null && !message.isEmpty()) {
