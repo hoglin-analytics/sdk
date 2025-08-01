@@ -7,17 +7,16 @@ import java.util.List;
 
 public class HoglinRetryStrategy implements RetryStrategy {
     @Override
-    public boolean isRetryable(HttpResponse<?> response) {
+    public boolean isRetryable(final HttpResponse<?> response) {
         return List.of(-1, 408, 429, 500, 502, 503, 504)
             .contains(response.getStatus());
     }
 
     @Override
-    public long getWaitTime(HttpResponse<?> response) {
-        System.out.println("retrying");
+    public long getWaitTime(final HttpResponse<?> response) {
         try {
             return Long.parseLong(response.getHeaders().getFirst("Retry-After")) * 1000;
-        } catch (Exception e) {
+        } catch (final Exception e) {
             return 5000;
         }
     }
