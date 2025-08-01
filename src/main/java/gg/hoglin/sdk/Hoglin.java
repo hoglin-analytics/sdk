@@ -8,19 +8,24 @@ import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import gg.hoglin.sdk.models.error.ApiErrorResponse;
 import gg.hoglin.sdk.models.experiment.ExperimentEvaluation;
+import gg.hoglin.sdk.models.strategy.HoglinRetryStrategy;
 import gg.hoglin.sdk.serialzation.HoglinAdapter;
-import gg.hoglin.sdk.task.FlushTask;
+import gg.hoglin.sdk.task.AnalyticBatchTask;
 import kong.unirest.core.*;
 import lombok.*;
 import lombok.experimental.Accessors;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.annotation.WillClose;
+import java.io.Closeable;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.logging.Logger;
 
 /**
  * Hoglin instance
@@ -29,7 +34,7 @@ import java.util.logging.Logger;
 @Accessors(fluent = true)
 @Getter
 @ToString
-public class Hoglin {
+public class Hoglin implements Closeable {
     /**
      * The default API endpoint for Hoglin
      */
@@ -43,8 +48,7 @@ public class Hoglin {
     /**
      * The logger used for Hoglin
      */
-    public final Logger logger = Logger.getLogger("Hoglin");
-
+    private static final Logger logger = LoggerFactory.getLogger(Hoglin.class);
 
     /**
      * The server key for Hoglin
@@ -82,7 +86,8 @@ public class Hoglin {
      * The {@link UnirestInstance} used for making HTTP requests
      */
     @ToString.Exclude
-    @Builder.Default @NotNull private UnirestInstance httpClient = Unirest.primaryInstance();
+    @WillClose
+    private UnirestInstance httpClient;
 
     /**
      * The Gson instance used for serialization and deserialization
@@ -92,8 +97,13 @@ public class Hoglin {
 
     private final Queue<RecordedAnalytic<?>> eventQueue = new LinkedList<>();
 
+    private boolean closed = false;
+
     private void init() {
-        executor.scheduleAtFixedRate(new FlushTask(this), autoFlushInterval, autoFlushInterval, TimeUnit.MILLISECONDS);
+        if (httpClient == null) {
+            httpClient = createDefaultHttpClient(baseUrl);
+        }
+        executor.scheduleAtFixedRate(new AnalyticBatchTask(this), autoFlushInterval, autoFlushInterval, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -110,7 +120,7 @@ public class Hoglin {
      * Flushes the event queue immediately. This method is typically used to ensure that all pending events are sent
      * to the Hoglin API without waiting for the auto-flush interval and being limited by the max batch size
      *
-     * @apiNote This method is blocking
+     * @apiNote this method makes a blocking http request
      * @return The {@link HttpResponse} from the Hoglin API, or null if there are no queued events (no request would've
      * been made)
      */
@@ -122,13 +132,9 @@ public class Hoglin {
         final ArrayList<RecordedAnalytic<?>> events = new ArrayList<>(eventQueue);
         eventQueue.clear();
 
-        HttpResponse<String> response = Unirest.put(baseUrl + "/analytics/" + serverKey)
-            .header("accept", "application/json")
-            .header("Content-Type", "application/json")
+        return httpClient.put("/analytics/" + serverKey)
             .body(gson.toJson(events))
             .asString();
-
-        return response;
     }
 
     /**
@@ -137,7 +143,7 @@ public class Hoglin {
      * @param eventType the type of event to track
      * @param properties a map of properties associated with the event
      */
-    public void track(@NotNull String eventType, @NotNull Map<String, Object> properties) {
+    public void track(@NotNull final String eventType, @NotNull final Map<String, Object> properties) {
         track(new RecordedAnalytic<>(eventType, Instant.now(), properties));
     }
 
@@ -146,7 +152,7 @@ public class Hoglin {
      *
      * @param eventType the type of event to track
      */
-    public void track(@NotNull String eventType) {
+    public void track(@NotNull final String eventType) {
         track(new RecordedAnalytic<>(eventType, Instant.now(), Collections.emptyMap()));
     }
 
@@ -160,7 +166,7 @@ public class Hoglin {
      * @param <T> the type of the analytic object
      * @see #track(NamedAnalytic)
      */
-    public <T extends Analytic> void track(String eventType, T analytic) {
+    public <T extends Analytic> void track(final String eventType, final T analytic) {
         track(new RecordedAnalytic<>(eventType, Instant.now(), analytic));
     }
 
@@ -171,7 +177,7 @@ public class Hoglin {
      * @param analytic the named analytic object to track
      * @param <T> the type of the named analytic object
      */
-    public <T extends NamedAnalytic> void track(T analytic) {
+    public <T extends NamedAnalytic> void track(final T analytic) {
         track(new RecordedAnalytic<>(analytic.getEventType(), Instant.now(), analytic));
     }
 
@@ -182,13 +188,17 @@ public class Hoglin {
      * @param analytic the recorded analytic event to track
      */
     public void track(RecordedAnalytic<?> analytic) {
+        if (closed) {
+            throw new IllegalStateException("Attempted to track event whilst closed");
+        }
         eventQueue.add(analytic);
     }
 
     /**
-     * Evaluates whether the server is part of the specified experiment (the experiment rollout must be 100%)
+     * Evaluates whether this instance is part of the specified experiment (the experiment rollout must be 100%)
+     *
      * @param experimentId the ID of the experiment to evaluate
-     * @return true if the server is part of the experiment, false otherwise
+     * @return true if this instance is part of the experiment, false otherwise
      * @see #getExperiment(String, UUID)
      */
     public boolean getExperiment(final String experimentId) {
@@ -197,6 +207,7 @@ public class Hoglin {
 
     /**
      * Evaluates whether the player is part of the specified experiment for a specific player.
+     *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
      * @return true if the player is part of the experiment, false otherwise
@@ -206,9 +217,11 @@ public class Hoglin {
     }
 
     private boolean evaluateExperiment(final String experimentId, @Nullable final UUID playerUUID) {
-        final GetRequest request = Unirest.get(baseUrl + "/experiments/" + serverKey + "/" + experimentId + "/evaluate")
-            .header("accept", "application/json")
-            .header("Content-Type", "application/json");
+        if (closed) {
+            throw new IllegalStateException("Attempted to evaluate experiment whilst closed");
+        }
+
+        final GetRequest request = httpClient.get("/experiments/" + serverKey + "/" + experimentId + "/evaluate");
 
         if (playerUUID != null) {
             request.queryString("playerUUID", playerUUID.toString());
@@ -216,8 +229,9 @@ public class Hoglin {
 
         final HttpResponse<String> response = request.asString();
         if (!response.isSuccess()) {
-                logger.severe("Failed to evaluate experiment '%s', defaulting to false. %s".formatted(
-                    experimentId, contructErrorDescription(response)));
+                logger.error("Failed to evaluate experiment '{}', defaulting to false. {}",
+                    experimentId, contructErrorDescription(response)
+                );
                 return false;
         }
 
@@ -253,11 +267,44 @@ public class Hoglin {
         return builder.create();
     }
 
+    private static UnirestInstance createDefaultHttpClient(final String baseUrl) {
+        final Config config = new Config();
+        config.defaultBaseUrl(baseUrl);
+        config.retryAfter(new HoglinRetryStrategy());
+        config.addDefaultHeader("accept", "application/json");
+        config.addDefaultHeader("Content-Type", "application/json");
+        config.addDefaultHeader("User-Agent", "Hoglin/Java (Hoglin SDK)");
+
+        return new UnirestInstance(config);
+    }
+
+    /**
+     * Gracefully stops all SDK tasks. This involves flushing the entire remaining event queue in one big batch,
+     * bypassing the max batch size parameter. Additionally, after calling this no more events can be queued, and
+     * no more requests from the Hoglin API can be made (eg: evaluating experiments). An example of when to use this
+     * is for on server/application shutdown.
+     *
+     * @apiNote this method makes a blocking http request
+     */
+    @Override
+    public void close() {
+        if (closed) return;
+
+        flush();
+        httpClient.close();
+        closed = true;
+        logger.trace("Successfully closed Hoglin");
+    }
+
     public static class HoglinBuilder {
         public Hoglin build() {
             final Hoglin hoglin = _build();
             hoglin.init();
             return hoglin;
+        }
+
+        private HoglinBuilder closed(final boolean closed) {
+            return this;
         }
     }
 }

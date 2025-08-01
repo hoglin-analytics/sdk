@@ -5,6 +5,7 @@ gson = "2.13.1"
 unirest = "4.4.5"
 jetbrains-annotations = "24.0.0"
 autoservice = "1.1.1"
+slf4j = "2.0.17"
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
@@ -16,3 +17,4 @@ unirest-core = { module = "com.konghq:unirest-java-core", version.ref = "unirest
 unirest-gson = { module = "com.konghq:unirest-modules-gson", version.ref = "unirest" }
 jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains-annotations" }
 autoservice = { module = "com.google.auto.service:auto-service", version.ref = "autoservice" }
+slf4j = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }

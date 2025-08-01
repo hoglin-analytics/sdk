@@ -16,6 +16,7 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.unirest.core)
     implementation(libs.unirest.gson)
+    implementation(libs.slf4j)
     compileOnly(libs.lombok)
     compileOnly(libs.jetbrains.annotations)
     compileOnly(libs.autoservice)

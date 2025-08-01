@@ -1,18 +1,21 @@
 package gg.hoglin.sdk.models.error;
 
 import lombok.Data;
+import lombok.experimental.Accessors;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 /**
  * Represents an error response from the Hoglin API.
- * Contains an error code, optional details about the error, and an optional message.
  */
 @Data
+@Accessors(fluent = true)
 public class ApiErrorResponse {
-    private final String error;
+    private final @NotNull String error;
     private final @Nullable List<ApiErrorDetail> details;
     private final @Nullable String message;
 
@@ -30,9 +33,9 @@ public class ApiErrorResponse {
 
         if (details != null && !details.isEmpty()) {
             result.append(": ");
-            final List<String> detailStrings = new ArrayList<>();
-            for (ApiErrorDetail detail : details) {
-                detailStrings.add(detail.getField() + " - " + detail.getMessage());
+            final Collection<String> detailStrings = new ArrayList<>(details.size());
+            for (final ApiErrorDetail detail : details) {
+                detailStrings.add(detail.field() + " - " + detail.message());
             }
             result.append(String.join(", ", detailStrings));
         }
