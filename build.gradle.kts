@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     `java-library`
     `maven-publish`
@@ -35,6 +37,17 @@ publishing {
             artifactId = "sdk"
             version = "$version"
             artifact(tasks.shadowJar.get().archiveFile)
+        }
+    }
+
+    repositories {
+        maven {
+            name = "Waypoint-Studios"
+            url = URI("https://maven.waypointstudios.com/releases")
+            credentials {
+                username = findProperty("repo.waypoint.username") as String? ?: System.getenv("REPO_USER")
+                password = findProperty("repo.waypoint.password") as String? ?: System.getenv("REPO_PASS")
+            }
         }
     }
 }
