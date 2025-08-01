@@ -1,4 +1,4 @@
-package gg.hoglin.sdk.models.strategy;
+package gg.hoglin.sdk.strategy;
 
 import kong.unirest.core.HttpResponse;
 import kong.unirest.core.RetryStrategy;

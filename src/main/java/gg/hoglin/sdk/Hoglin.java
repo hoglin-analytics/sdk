@@ -8,7 +8,7 @@ import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import gg.hoglin.sdk.models.error.ApiErrorResponse;
 import gg.hoglin.sdk.models.experiment.ExperimentEvaluation;
-import gg.hoglin.sdk.models.strategy.HoglinRetryStrategy;
+import gg.hoglin.sdk.strategy.HoglinRetryStrategy;
 import gg.hoglin.sdk.serialzation.HoglinAdapter;
 import gg.hoglin.sdk.task.AnalyticBatchTask;
 import kong.unirest.core.*;
@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.WillClose;
 import java.io.Closeable;
-import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
