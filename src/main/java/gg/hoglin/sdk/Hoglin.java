@@ -194,7 +194,8 @@ public class Hoglin implements Closeable {
     }
 
     /**
-     * Evaluates whether this instance is part of the specified experiment (the experiment rollout must be 100%)
+     * Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
+     * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100.
      *
      * @param experimentId the ID of the experiment to evaluate
      * @return true if this instance is part of the experiment, false otherwise
@@ -205,7 +206,9 @@ public class Hoglin implements Closeable {
     }
 
     /**
-     * Evaluates whether the player is part of the specified experiment for a specific player.
+     * Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
+     * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
+     * rollout percentage.
      *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
