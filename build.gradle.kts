@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "gg.hoglin"
-version = "1.0.0"
+version = "1.0.3"
 
 repositories {
     mavenCentral()
@@ -26,6 +26,15 @@ dependencies {
     annotationProcessor(libs.autoservice)
 }
 
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+tasks.javadoc {
+    (options as StandardJavadocDocletOptions).addStringOption("tag", "apiNote:a:API Note:")
+}
+
 tasks.build {
     dependsOn(tasks.shadowJar)
 }
@@ -37,6 +46,8 @@ publishing {
             artifactId = "sdk"
             version = "$version"
             artifact(tasks.shadowJar.get().archiveFile)
+            artifact(tasks.named("sourcesJar").get())
+            artifact(tasks.named("javadocJar").get())
         }
     }
 

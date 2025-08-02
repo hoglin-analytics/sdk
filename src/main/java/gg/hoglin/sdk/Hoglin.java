@@ -111,7 +111,7 @@ public class Hoglin implements Closeable {
      * @param apiKey The API key for Hoglin
      * @return A new Hoglin instance
      */
-    static HoglinBuilder builder(@NotNull String apiKey) {
+    public static HoglinBuilder builder(@NotNull String apiKey) {
         return new HoglinBuilder().serverKey(apiKey);
     }
 
