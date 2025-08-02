@@ -102,7 +102,10 @@ public class Hoglin implements Closeable {
         if (httpClient == null) {
             httpClient = createDefaultHttpClient(baseUrl);
         }
-        executor.scheduleAtFixedRate(new AnalyticBatchTask(this), autoFlushInterval, autoFlushInterval, TimeUnit.MILLISECONDS);
+
+        if (enableAutoFlush) {
+            executor.scheduleAtFixedRate(new AnalyticBatchTask(this), autoFlushInterval, autoFlushInterval, TimeUnit.MILLISECONDS);
+        }
     }
 
     /**
