@@ -79,7 +79,7 @@ public class Hoglin implements Closeable {
      * The executor used to create threads for Hoglin
      */
     @ToString.Exclude
-    @Builder.Default @NotNull private ScheduledExecutorService executor = Executors.newScheduledThreadPool(0, DEFAULT_THREAD_FACTORY);
+    @Builder.Default @NotNull private ScheduledExecutorService executor = Executors.newScheduledThreadPool(8, DEFAULT_THREAD_FACTORY);
 
     /**
      * The {@link UnirestInstance} used for making HTTP requests
@@ -258,7 +258,7 @@ public class Hoglin implements Closeable {
         } catch (final JsonSyntaxException e) {
             return httpStatus + "Received unstructured error response: " + response.getBody();
         } catch (final Exception e) {
-            return httpStatus + "An unexpected error occurred while processing the response: " + response + " e: " + e.getMessage();
+            return httpStatus + "An unexpected error occurred while processing the response: " + response.getBody() + " e: " + e.getMessage();
         }
     }
 

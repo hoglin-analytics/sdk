@@ -3,7 +3,6 @@ package gg.hoglin.sdk.task;
 import gg.hoglin.sdk.Hoglin;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import kong.unirest.core.HttpResponse;
-import kong.unirest.core.Unirest;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,12 +34,14 @@ public class AnalyticBatchTask implements Runnable {
             }
         }
 
-        final HttpResponse<String> response = hoglin.httpClient().put("/analytics/" + hoglin.serverKey())
-            .body(hoglin.gson().toJson(events))
-            .asString();
+        hoglin.executor().execute(() -> {
+            final HttpResponse<String> response = hoglin.httpClient().put("/analytics/" + hoglin.serverKey())
+                .body(hoglin.gson().toJson(events))
+                .asString();
 
-        if (!response.isSuccess()) {
-            logger.error("Failed to flush {} queued events: {}", take, hoglin.contructErrorDescription(response));
-        }
+            if (!response.isSuccess()) {
+                logger.error("Failed to flush {} queued events: {}", take, hoglin.contructErrorDescription(response));
+            }
+        });
     }
 }
