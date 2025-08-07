@@ -1,4 +1,4 @@
-package gg.hoglin.sdk.serialzation;
+package gg.hoglin.sdk.serialization;
 
 import com.google.auto.service.AutoService;
 import com.google.gson.stream.JsonReader;

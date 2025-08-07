@@ -9,7 +9,7 @@ import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import gg.hoglin.sdk.models.error.ApiErrorResponse;
 import gg.hoglin.sdk.models.experiment.ExperimentEvaluation;
 import gg.hoglin.sdk.strategy.HoglinRetryStrategy;
-import gg.hoglin.sdk.serialzation.HoglinAdapter;
+import gg.hoglin.sdk.serialization.HoglinAdapter;
 import gg.hoglin.sdk.task.AnalyticBatchTask;
 import kong.unirest.core.*;
 import lombok.*;
