@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 
 /**
  * A task responsible for sending a batch of events from the event queue to the Hoglin API.
@@ -34,12 +36,16 @@ public class AnalyticBatchTask implements Runnable {
             }
         }
 
-        hoglin.executor().execute(() -> {
-            final HttpResponse<String> response = hoglin.httpClient().put("/analytics/" + hoglin.serverKey())
+        CompletableFuture.supplyAsync(() ->
+            hoglin.httpClient().put("/analytics/" + hoglin.serverKey())
                 .body(hoglin.gson().toJson(events))
-                .asString();
-
-            if (!response.isSuccess()) {
+                .asString(), hoglin.executor()
+        ).thenAccept(response -> {
+            if (response.isSuccess()) return;
+            if (hoglin.requeueFailedFlushes()) {
+                hoglin.trackMany(events);
+                logger.error("Failed to flush {} queued events, added back to the end of the queue: {}", take, hoglin.contructErrorDescription(response));
+            } else {
                 logger.error("Failed to flush {} queued events: {}", take, hoglin.contructErrorDescription(response));
             }
         });

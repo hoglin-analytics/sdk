@@ -58,17 +58,23 @@ public class Hoglin implements Closeable {
     /**
      * How often (ms) to send queued events
      */
-    @Builder.Default private long autoFlushInterval = 30000;
+    @Builder.Default private long autoFlushInterval = 15000;
 
     /**
      * Max events sent per batch
      */
-    @Builder.Default private int maxBatchSize = 1000;
+    @Builder.Default private int maxBatchSize = 10000;
 
     /**
      * Whether to auto-flush events
      */
     @Builder.Default private boolean enableAutoFlush = true;
+
+    /**
+     * Whether to requeue failed flushes. When true, if a flush fails (network failure, server error, etc.), all the
+     * events will be added back to the *end* of the event queue to be retried later.
+     */
+    @Builder.Default private boolean requeueFailedFlushes = true;
 
     /**
      * The API endpoint for Hoglin
@@ -128,15 +134,32 @@ public class Hoglin implements Closeable {
      */
     @Blocking
     public @Nullable HttpResponse<String> flush() {
+        if (closed) {
+            throw new IllegalStateException("Attempted to flush events whilst closed");
+        }
+
         final int take = eventQueue.size();
         if (take == 0) return null; // No events to flush
 
         final ArrayList<RecordedAnalytic<?>> events = new ArrayList<>(eventQueue);
         eventQueue.clear();
 
-        return httpClient.put("/analytics/" + serverKey)
+        final HttpResponse<String> response = httpClient.put("/analytics/" + serverKey)
             .body(gson.toJson(events))
             .asString();
+
+        if (requeueFailedFlushes && !response.isSuccess()) {
+            trackMany(events);
+        }
+
+        return response;
+    }
+
+    /**
+     * Clears the event queue, removing all queued events without sending them to the Hoglin API.
+     */
+    public void clearQueue() {
+        eventQueue.clear();
     }
 
     /**
@@ -189,11 +212,21 @@ public class Hoglin implements Closeable {
      *
      * @param analytic the recorded analytic event to track
      */
-    public void track(RecordedAnalytic<?> analytic) {
+    public void track(final RecordedAnalytic<?> analytic) {
         if (closed) {
             throw new IllegalStateException("Attempted to track event whilst closed");
         }
         eventQueue.add(analytic);
+    }
+
+    /**
+     * Tracks multiple recorded analytic events at once. This method is useful for manual batching. Consider using the
+     * other track methods for convenience unless necessary.
+     *
+     * @param analytics the collection of recorded analytic events to track
+     */
+    public void trackMany(final Collection<RecordedAnalytic<?>> analytics) {
+        eventQueue.addAll(analytics);
     }
 
     /**
