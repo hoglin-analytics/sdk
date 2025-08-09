@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
 
 /**
  * A task responsible for sending a batch of events from the event queue to the Hoglin API.

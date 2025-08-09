@@ -100,7 +100,11 @@ public class Hoglin implements Closeable {
     @ToString.Exclude
     @Builder.Default @NotNull private Gson gson = createDefaultGson();
 
+    @ToString.Exclude
     private final Queue<RecordedAnalytic<?>> eventQueue = new LinkedList<>();
+
+    @ToString.Exclude
+    private @Nullable ScheduledFuture<?> autoFlushTask = null;
 
     private boolean closed = false;
 
@@ -110,7 +114,7 @@ public class Hoglin implements Closeable {
         }
 
         if (enableAutoFlush) {
-            executor.scheduleAtFixedRate(new AnalyticBatchTask(this), autoFlushInterval, autoFlushInterval, TimeUnit.MILLISECONDS);
+            autoFlushTask = executor.scheduleAtFixedRate(new AnalyticBatchTask(this), autoFlushInterval, autoFlushInterval, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -328,6 +332,10 @@ public class Hoglin implements Closeable {
     public void close() {
         if (closed) return;
 
+        if (autoFlushTask != null) {
+            autoFlushTask.cancel(true);
+        }
+
         flush();
         httpClient.close();
         closed = true;
@@ -342,6 +350,10 @@ public class Hoglin implements Closeable {
         }
 
         private HoglinBuilder closed(final boolean closed) {
+            return this;
+        }
+
+        private HoglinBuilder autoFlushTask(final ScheduledFuture<?> autoFlushTask) {
             return this;
         }
     }
