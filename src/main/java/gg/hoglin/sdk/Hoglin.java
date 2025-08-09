@@ -142,6 +142,10 @@ public class Hoglin implements Closeable {
             throw new IllegalStateException("Attempted to flush events whilst closed");
         }
 
+        return _flush();
+    }
+
+    private @Nullable HttpResponse<String> _flush() {
         final int take = eventQueue.size();
         if (take == 0) return null; // No events to flush
 
@@ -331,14 +335,19 @@ public class Hoglin implements Closeable {
     @Override
     public void close() {
         if (closed) return;
+        closed = true;
 
         if (autoFlushTask != null) {
             autoFlushTask.cancel(true);
         }
 
-        flush();
+        final int take = eventQueue.size();
+        final HttpResponse<String> response = _flush();
+        if (response != null && !response.isSuccess()) {
+            logger.error("Failed to flush {} queued events while closing: {}", take, contructErrorDescription(response));
+        }
+
         httpClient.close();
-        closed = true;
         logger.trace("Successfully closed Hoglin");
     }
 

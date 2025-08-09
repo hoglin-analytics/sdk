@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "gg.hoglin"
-version = "1.0.7"
+version = "1.0.8"
 
 repositories {
     mavenCentral()
