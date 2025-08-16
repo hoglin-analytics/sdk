@@ -243,6 +243,7 @@ public class Hoglin implements Closeable {
      *
      * @param experimentId the ID of the experiment to evaluate
      * @return true if this instance is part of the experiment, false otherwise
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @see #getExperiment(String, UUID)
      */
     public boolean getExperiment(final String experimentId) {
@@ -256,6 +257,7 @@ public class Hoglin implements Closeable {
      *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @return true if the player is part of the experiment, false otherwise
      */
     public boolean getExperiment(final String experimentId, @NotNull final UUID playerUUID) {
