@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.WillClose;
+import java.beans.PersistenceDelegate;
 import java.io.Closeable;
 import java.time.Instant;
 import java.util.*;
@@ -238,33 +239,81 @@ public class Hoglin implements Closeable {
     }
 
     /**
-     * Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
-     * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100.
+     * <p>Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
+     * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100.</p>
+     *
+     * <p>This is a safe evaluation. If the request to evaluate the experiment fails (invalid experiment id, network
+     * error, etc), this method will just return false, with a log in the console. If you would like to handle the
+     * response manually, look at {@link Hoglin#evaluateExperimentRaw(String)} </p>
      *
      * @param experimentId the ID of the experiment to evaluate
-     * @return true if this instance is part of the experiment, false otherwise
      * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #getExperiment(String, UUID)
+     * @see #getExperimentSafe(String, UUID)
+     * @see #evaluateExperimentRaw(String)
+     * @return true if this instance is part of the experiment, false otherwise
      */
-    public boolean getExperiment(final String experimentId) {
-        return evaluateExperiment(experimentId, null);
+    public boolean evaluateExperiment(final String experimentId) {
+        return getExperimentSafe(experimentId, null);
     }
 
     /**
-     * Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
+     * <p>Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
      * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
-     * rollout percentage.
+     * rollout percentage.</p>
+     *
+     * <p>This is a safe evaluation. If the request to evaluate the experiment fails (invalid experiment id, network
+     * error, etc), this method will just return false, with a log in the console. If you would like to handle the
+     * response manually, look at {@link Hoglin#evaluateExperimentRaw(String, UUID)}  </p>
      *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
      * @apiNote This makes a blocking HTTP request to the Hoglin API
+     * @see #getExperimentSafe(String, UUID)
+     * @see #evaluateExperimentRaw(String, UUID)
      * @return true if the player is part of the experiment, false otherwise
      */
-    public boolean getExperiment(final String experimentId, @NotNull final UUID playerUUID) {
-        return evaluateExperiment(experimentId, playerUUID);
+    public boolean evaluateExperiment(final String experimentId, @NotNull final UUID playerUUID) {
+        return getExperimentSafe(experimentId, playerUUID);
     }
 
-    private boolean evaluateExperiment(final String experimentId, @Nullable final UUID playerUUID) {
+
+    /**
+     * <p>Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
+     * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100.</p>
+     *
+     * <p>This method returns the raw response from the Hoglin API, allowing you to handle errors yourself. Alternatively,
+     * to default to false when an error occurs, you may use {@link Hoglin#evaluateExperimentRaw(String)}</p>
+     *
+     * @param experimentId the ID of the experiment to evaluate
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     * @see #getExperimentRaw(String, UUID)
+     * @see #evaluateExperiment(String)
+     * @return the raw {@link HttpResponse<Boolean>} from the experiment evaluation call to Hoglin API
+     */
+    public HttpResponse<Boolean> evaluateExperimentRaw(final String experimentId) {
+        return getExperimentRaw(experimentId, null);
+    }
+
+    /**
+     * <p>Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
+     * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
+     * rollout percentage.</p>
+     *
+     * <p>This method returns the raw response from the Hoglin API, allowing you to handle errors yourself. Alternatively,
+     * to default to false when an error occurs, you may use {@link Hoglin#evaluateExperimentRaw(String, UUID)}</p>
+     *
+     * @param experimentId the ID of the experiment to evaluate
+     * @param playerUUID the UUID of the player to evaluate the experiment for
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     * @see #getExperimentRaw(String, UUID)
+     * @see #evaluateExperiment(String, UUID)
+     * @return the raw {@link HttpResponse<Boolean>} from the experiment evaluation call to Hoglin API
+     */
+    public HttpResponse<Boolean> evaluateExperimentRaw(final String experimentId, @NotNull final UUID playerUUID) {
+        return getExperimentRaw(experimentId, playerUUID);
+    }
+
+    private boolean getExperimentSafe(final String experimentId, @Nullable final UUID playerUUID) {
         if (closed) {
             throw new IllegalStateException("Attempted to evaluate experiment whilst closed");
         }
@@ -285,6 +334,20 @@ public class Hoglin implements Closeable {
 
         final ExperimentEvaluation evaluation = gson.fromJson(response.getBody(), ExperimentEvaluation.class);
         return evaluation.isInExperiment();
+    }
+
+    private HttpResponse<Boolean> getExperimentRaw(final String experimentId, @Nullable final UUID playerUUID) {
+        if (closed) {
+            throw new IllegalStateException("Attempted to evaluate experiment whilst closed");
+        }
+
+        final GetRequest request = httpClient.get("/experiments/" + serverKey + "/" + experimentId + "/evaluate");
+
+        if (playerUUID != null) {
+            request.queryString("playerUUID", playerUUID.toString());
+        }
+
+        return request.asObject(Boolean.class);
     }
 
     /**
