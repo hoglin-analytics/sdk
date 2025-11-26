@@ -8,6 +8,7 @@ import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import gg.hoglin.sdk.models.error.ApiErrorResponse;
 import gg.hoglin.sdk.models.experiment.ExperimentEvaluation;
+import gg.hoglin.sdk.models.visualization.VisualizationImport;
 import gg.hoglin.sdk.strategy.HoglinRetryStrategy;
 import gg.hoglin.sdk.serialization.HoglinAdapter;
 import gg.hoglin.sdk.task.AnalyticBatchTask;
@@ -239,6 +240,37 @@ public class Hoglin implements Closeable {
     }
 
     /**
+     * Imports a visualization to the Hoglin dashboard.
+     *
+     * @param visualizationId the ID of the visualization to import
+     * @param name optional new name for the imported visualization, or null to keep the original name
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     * @return the {@link HttpResponse} from the Hoglin API for any further handling
+     */
+    public HttpResponse<String> importVisualization(final String visualizationId, @Nullable final String name) {
+        if (closed) {
+            throw new IllegalStateException("Attempted to import visualization whilst closed");
+        }
+
+        final RequestBodyEntity request = httpClient.post("/visualizations/" + serverKey + "/import")
+            .body(gson.toJson(new VisualizationImport(visualizationId, name)));
+
+        return request.asString();
+    }
+
+    /**
+     * Imports a visualization to the Hoglin dashboard.
+     *
+     * @param visualizationId the ID of the visualization to import
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     * @see #importVisualization(String, String) to specify a new name for the imported visualization
+     * @return  the {@link HttpResponse} from the Hoglin API for any further handling
+     */
+    public HttpResponse<String> importVisualization(final String visualizationId) {
+        return importVisualization(visualizationId, null);
+    }
+
+    /**
      * <p>Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
      * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100.</p>
      *
@@ -288,7 +320,7 @@ public class Hoglin implements Closeable {
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @see #getExperimentRaw(String, UUID)
      * @see #evaluateExperiment(String)
-     * @return the raw {@link HttpResponse<Boolean>} from the experiment evaluation call to Hoglin API
+     * @return the raw {@link HttpResponse} from the experiment evaluation call to Hoglin API
      */
     public HttpResponse<Boolean> evaluateExperimentRaw(final String experimentId) {
         return getExperimentRaw(experimentId, null);
@@ -307,7 +339,7 @@ public class Hoglin implements Closeable {
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @see #getExperimentRaw(String, UUID)
      * @see #evaluateExperiment(String, UUID)
-     * @return the raw {@link HttpResponse<Boolean>} from the experiment evaluation call to Hoglin API
+     * @return the raw {@link HttpResponse} from the experiment evaluation call to Hoglin API
      */
     public HttpResponse<Boolean> evaluateExperimentRaw(final String experimentId, @NotNull final UUID playerUUID) {
         return getExperimentRaw(experimentId, playerUUID);
