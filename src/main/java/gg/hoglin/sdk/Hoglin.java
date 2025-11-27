@@ -8,7 +8,8 @@ import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import gg.hoglin.sdk.models.error.ApiErrorResponse;
 import gg.hoglin.sdk.models.experiment.ExperimentEvaluation;
-import gg.hoglin.sdk.models.visualization.VisualizationImport;
+import gg.hoglin.sdk.models.visualization.ImportedSnapshotEvaluation;
+import gg.hoglin.sdk.models.visualization.SnapshotImport;
 import gg.hoglin.sdk.strategy.HoglinRetryStrategy;
 import gg.hoglin.sdk.serialization.HoglinAdapter;
 import gg.hoglin.sdk.task.AnalyticBatchTask;
@@ -22,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.WillClose;
-import java.beans.PersistenceDelegate;
 import java.io.Closeable;
 import java.time.Instant;
 import java.util.*;
@@ -247,13 +247,13 @@ public class Hoglin implements Closeable {
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
      */
-    public HttpResponse<String> importVisualization(final String snapshotId, @Nullable final String name) {
+    public HttpResponse<String> importSnapshot(final String snapshotId, @Nullable final String name) {
         if (closed) {
-            throw new IllegalStateException("Attempted to import visualization whilst closed");
+            throw new IllegalStateException("Attempted to import visualization snapshot whilst closed");
         }
 
         final RequestBodyEntity request = httpClient.post("/visualizations/" + serverKey + "/import")
-            .body(gson.toJson(new VisualizationImport(snapshotId, name)));
+            .body(gson.toJson(new SnapshotImport(snapshotId, name)));
 
         return request.asString();
     }
@@ -263,11 +263,37 @@ public class Hoglin implements Closeable {
      *
      * @param snapshotId the ID of the visualization snapshot to import
      * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #importVisualization(String, String) to specify a new name for the imported visualization
+     * @see #importSnapshot(String, String) to specify a new name for the imported visualization
      * @return  the {@link HttpResponse} from the Hoglin API for any further handling
      */
-    public HttpResponse<String> importVisualization(final String snapshotId) {
-        return importVisualization(snapshotId, null);
+    public HttpResponse<String> importSnapshot(final String snapshotId) {
+        return importSnapshot(snapshotId, null);
+    }
+
+    /**
+     * <p>Checks if a visualization snapshot has already been imported.</p>
+     *
+     * <p>This is a safe check. If the request to check the snapshot fails, this method will just return false, with a
+     * log in the console.</p>
+     *
+     * @param snapshotId the ID of the visualization snapshot to check
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     * @return true if this Hoglin instance has a visualization imported from the specified snapshot, false otherwise
+     */
+    public boolean isSnapshotImported(final String snapshotId) {
+        if (closed) {
+            throw new IllegalStateException("Attempted to check if visualization snapshot is imported whilst closed");
+        }
+
+        final HttpResponse<String> response = httpClient.get("/visualizations/imported/" + serverKey + "/" + snapshotId).asString();
+        if (!response.isSuccess()) {
+            logger.error("Failed to check if snapshot '{}' is imported: {}", snapshotId, contructErrorDescription(response));
+            return false;
+        }
+
+        final ImportedSnapshotEvaluation evaluation = gson.fromJson(response.getBody(), ImportedSnapshotEvaluation.class);
+
+        return evaluation.isImported();
     }
 
     /**

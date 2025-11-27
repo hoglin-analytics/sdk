@@ -9,7 +9,7 @@ import org.jetbrains.annotations.Nullable;
  */
 @Data
 @Accessors(fluent = true)
-public class VisualizationImport {
+public class SnapshotImport {
     private final String id;
     private final @Nullable String name;
 }
