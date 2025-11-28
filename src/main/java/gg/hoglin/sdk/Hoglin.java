@@ -245,7 +245,7 @@ public class Hoglin implements Closeable {
      * @param snapshotId the ID of the visualization snapshot to import
      * @param name optional new name for the imported visualization, or null to keep the original name
      * @param preventDuplicate optional flag to prevent importing if the dashboard already has a visualization from
-     *                          the same snapshot. This is similar to checking {@link #isSnapshotImported(String)}
+     *                          the same snapshot. This is similar to checking {@link #isSnapshotImported(UUID)}
      *                          before importing, but is done in within a singular import request within the API.
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
@@ -266,10 +266,10 @@ public class Hoglin implements Closeable {
      *
      * @param snapshotId the ID of the visualization snapshot to import
      * @param preventDuplicate optional flag to prevent importing if the dashboard already has a visualization from
-     *                          the same snapshot. This is similar to checking {@link #isSnapshotImported(String)}
+     *                          the same snapshot. This is similar to checking {@link #isSnapshotImported(UUID)}
      *                          before importing, but is done in within a singular import request within the API.
      * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #importSnapshot(String, String, Boolean) for more options
+     * @see #importSnapshot(UUID, String, Boolean) for more options
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
      */
     public HttpResponse<String> importSnapshot(final UUID snapshotId, @Nullable final Boolean preventDuplicate) {
@@ -282,7 +282,7 @@ public class Hoglin implements Closeable {
      * @param snapshotId the ID of the visualization snapshot to import
      * @param name optional new name for the imported visualization, or null to keep the original name
      * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #importSnapshot(String, String, Boolean) for more options
+     * @see #importSnapshot(UUID, String, Boolean) for more options
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
      */
     public HttpResponse<String> importSnapshot(final UUID snapshotId, @Nullable final String name) {
@@ -293,8 +293,8 @@ public class Hoglin implements Closeable {
      * Imports a visualization snapshot to the Hoglin dashboard.
      *
      * @param snapshotId the ID of the visualization snapshot to import
+     * @see #importSnapshot(UUID, String, Boolean) for more options
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
-     * @see #importSnapshot(String, String, Boolean) for more options
      */
     public HttpResponse<String> importSnapshot(final UUID snapshotId) {
         return importSnapshot(snapshotId, null, false);
@@ -370,7 +370,7 @@ public class Hoglin implements Closeable {
      * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100.</p>
      *
      * <p>This method returns the raw response from the Hoglin API, allowing you to handle errors yourself. Alternatively,
-     * to default to false when an error occurs, you may use {@link Hoglin#evaluateExperimentRaw(String)}</p>
+     * to default to false when an error occurs, you may use {@link Hoglin#evaluateExperiment(String)}</p>
      *
      * @param experimentId the ID of the experiment to evaluate
      * @apiNote This makes a blocking HTTP request to the Hoglin API
@@ -388,7 +388,7 @@ public class Hoglin implements Closeable {
      * rollout percentage.</p>
      *
      * <p>This method returns the raw response from the Hoglin API, allowing you to handle errors yourself. Alternatively,
-     * to default to false when an error occurs, you may use {@link Hoglin#evaluateExperimentRaw(String, UUID)}</p>
+     * to default to false when an error occurs, you may use {@link Hoglin#evaluateExperiment(String, UUID)}</p>
      *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
