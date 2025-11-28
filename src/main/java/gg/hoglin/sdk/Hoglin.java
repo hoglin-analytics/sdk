@@ -244,16 +244,19 @@ public class Hoglin implements Closeable {
      *
      * @param snapshotId the ID of the visualization snapshot to import
      * @param name optional new name for the imported visualization, or null to keep the original name
+     * @param preventDuplicate optional flag to prevent importing if the dashboard already has a visualization from
+     *                          the same snapshot. This is similar to checking {@link #isSnapshotImported(String)}
+     *                          before importing, but is done in within a singular import request within the API.
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
      */
-    public HttpResponse<String> importSnapshot(final String snapshotId, @Nullable final String name) {
+    public HttpResponse<String> importSnapshot(final UUID snapshotId, @Nullable final String name, @Nullable final Boolean preventDuplicate) {
         if (closed) {
             throw new IllegalStateException("Attempted to import visualization snapshot whilst closed");
         }
 
         final RequestBodyEntity request = httpClient.post("/visualizations/" + serverKey + "/import")
-            .body(gson.toJson(new SnapshotImport(snapshotId, name)));
+            .body(gson.toJson(new SnapshotImport(snapshotId, name, preventDuplicate)));
 
         return request.asString();
     }
@@ -262,12 +265,39 @@ public class Hoglin implements Closeable {
      * Imports a visualization snapshot to the Hoglin dashboard.
      *
      * @param snapshotId the ID of the visualization snapshot to import
+     * @param preventDuplicate optional flag to prevent importing if the dashboard already has a visualization from
+     *                          the same snapshot. This is similar to checking {@link #isSnapshotImported(String)}
+     *                          before importing, but is done in within a singular import request within the API.
      * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #importSnapshot(String, String) to specify a new name for the imported visualization
-     * @return  the {@link HttpResponse} from the Hoglin API for any further handling
+     * @see #importSnapshot(String, String, Boolean) for more options
+     * @return the {@link HttpResponse} from the Hoglin API for any further handling
      */
-    public HttpResponse<String> importSnapshot(final String snapshotId) {
-        return importSnapshot(snapshotId, null);
+    public HttpResponse<String> importSnapshot(final UUID snapshotId, @Nullable final Boolean preventDuplicate) {
+        return importSnapshot(snapshotId, null, preventDuplicate);
+    }
+
+    /**
+     * Imports a visualization snapshot to the Hoglin dashboard.
+     *
+     * @param snapshotId the ID of the visualization snapshot to import
+     * @param name optional new name for the imported visualization, or null to keep the original name
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     * @see #importSnapshot(String, String, Boolean) for more options
+     * @return the {@link HttpResponse} from the Hoglin API for any further handling
+     */
+    public HttpResponse<String> importSnapshot(final UUID snapshotId, @Nullable final String name) {
+        return importSnapshot(snapshotId, name, false);
+    }
+
+    /**
+     * Imports a visualization snapshot to the Hoglin dashboard.
+     *
+     * @param snapshotId the ID of the visualization snapshot to import
+     * @return the {@link HttpResponse} from the Hoglin API for any further handling
+     * @see #importSnapshot(String, String, Boolean) for more options
+     */
+    public HttpResponse<String> importSnapshot(final UUID snapshotId) {
+        return importSnapshot(snapshotId, null, false);
     }
 
     /**
@@ -280,7 +310,7 @@ public class Hoglin implements Closeable {
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @return true if this Hoglin instance has a visualization imported from the specified snapshot, false otherwise
      */
-    public boolean isSnapshotImported(final String snapshotId) {
+    public boolean isSnapshotImported(final UUID snapshotId) {
         if (closed) {
             throw new IllegalStateException("Attempted to check if visualization snapshot is imported whilst closed");
         }
