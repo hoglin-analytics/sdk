@@ -301,29 +301,68 @@ public class Hoglin implements Closeable {
     }
 
     /**
-     * <p>Checks if a visualization snapshot has already been imported.</p>
+     * <p>Checks if a visualization snapshot has already been imported. This is a shorthand version of
+     * {@link #getImportedSnapshotInfo(UUID)} then checking {@link ImportedSnapshotEvaluation#isImported()}</p>
      *
      * <p>This is a safe check. If the request to check the snapshot fails, this method will just return false, with a
-     * log in the console.</p>
+     * log in the console. If you would like to handle the response manually, look at
+     * {@link Hoglin#getImportedSnapshotInfoRaw(UUID)}</p>
      *
      * @param snapshotId the ID of the visualization snapshot to check
      * @apiNote This makes a blocking HTTP request to the Hoglin API
+     * @see #getImportedSnapshotInfo(UUID)
      * @return true if this Hoglin instance has a visualization imported from the specified snapshot, false otherwise
      */
     public boolean isSnapshotImported(final UUID snapshotId) {
-        if (closed) {
-            throw new IllegalStateException("Attempted to check if visualization snapshot is imported whilst closed");
-        }
-
-        final HttpResponse<String> response = httpClient.get("/visualizations/imported/" + serverKey + "/" + snapshotId).asString();
-        if (!response.isSuccess()) {
-            logger.error("Failed to check if snapshot '{}' is imported: {}", snapshotId, contructErrorDescription(response));
+        final @Nullable ImportedSnapshotEvaluation evaluation = getImportedSnapshotInfo(snapshotId);
+        if (evaluation == null) {
             return false;
         }
 
-        final ImportedSnapshotEvaluation evaluation = gson.fromJson(response.getBody(), ImportedSnapshotEvaluation.class);
-
         return evaluation.isImported();
+    }
+
+    /**
+     * <p>Gets information about whether a visualization snapshot has already been imported.</p>
+     *
+     * <p>This is a safe check. If the request to check the snapshot fails, this method will just return null, with a
+     * log in the console. If you would like to handle the response manually, look at
+     * {@link Hoglin#getImportedSnapshotInfoRaw(UUID)}</p>
+     *
+     * @param snapshotId the ID of the visualization snapshot to check
+     * @return the {@link ImportedSnapshotEvaluation} containing information about the import status
+     * @see #isSnapshotImported(UUID)
+     * @see #getImportedSnapshotInfoRaw(UUID)
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     */
+    public @Nullable ImportedSnapshotEvaluation getImportedSnapshotInfo(final UUID snapshotId) {
+        final HttpResponse<String> response = getImportedSnapshotInfoRaw(snapshotId);
+        if (!response.isSuccess()) {
+            logger.error("Failed to get imported snapshot info: {}", contructErrorDescription(response));
+            return new ImportedSnapshotEvaluation(false, null);
+        }
+
+        return gson.fromJson(response.getBody(), ImportedSnapshotEvaluation.class);
+    }
+
+    /**
+     * <p>Gets information about whether a visualization snapshot has already been imported.</p>
+     *
+     * <p>This method returns the raw response from the Hoglin API, allowing you to handle errors yourself. Alternatively,
+     * to parse the response to a {@link ImportedSnapshotEvaluation} and default to null when an error occurs, you may
+     * use {@link Hoglin#getImportedSnapshotInfo(UUID)}</p>
+     *
+     * @param snapshotId the ID of the visualization snapshot to check
+     * @return the {@link ImportedSnapshotEvaluation} containing information about the import status
+     * @see #getImportedSnapshotInfo(UUID)
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     */
+    public HttpResponse<String> getImportedSnapshotInfoRaw(final UUID snapshotId) {
+        if (closed) {
+            throw new IllegalStateException("Attempted to get imported snapshot info whilst closed");
+        }
+
+        return httpClient.get("/visualizations/imported/" + serverKey + "/" + snapshotId).asString();
     }
 
     /**
@@ -332,7 +371,7 @@ public class Hoglin implements Closeable {
      *
      * <p>This is a safe evaluation. If the request to evaluate the experiment fails (invalid experiment id, network
      * error, etc), this method will just return false, with a log in the console. If you would like to handle the
-     * response manually, look at {@link Hoglin#evaluateExperimentRaw(String)} </p>
+     * response manually, look at {@link Hoglin#evaluateExperimentRaw(String)}</p>
      *
      * @param experimentId the ID of the experiment to evaluate
      * @apiNote This makes a blocking HTTP request to the Hoglin API
@@ -414,10 +453,10 @@ public class Hoglin implements Closeable {
 
         final HttpResponse<String> response = request.asString();
         if (!response.isSuccess()) {
-                logger.error("Failed to evaluate experiment '{}', defaulting to false. {}",
-                    experimentId, contructErrorDescription(response)
-                );
-                return false;
+            logger.error("Failed to evaluate experiment '{}', defaulting to false. {}",
+                experimentId, contructErrorDescription(response)
+            );
+            return false;
         }
 
         final ExperimentEvaluation evaluation = gson.fromJson(response.getBody(), ExperimentEvaluation.class);
