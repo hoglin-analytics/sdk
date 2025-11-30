@@ -9,7 +9,7 @@
   •
   <a href="https://docs.hoglin.gg/developer-sdk/installation">Docs</a>
   •
-  <a href='https://discord.gg/UTQqmzSQEs'>Support Discord</a>
+  <a href='https://discord.gg/hoglin'>Support Discord</a>
   
 </div>
 
