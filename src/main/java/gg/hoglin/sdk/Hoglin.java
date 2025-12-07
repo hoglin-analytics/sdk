@@ -7,15 +7,23 @@ import gg.hoglin.sdk.models.analytic.Analytic;
 import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import gg.hoglin.sdk.models.error.ApiErrorResponse;
-import gg.hoglin.sdk.models.experiment.ExperimentEvaluation;
+import gg.hoglin.sdk.models.experiment.ExperimentData;
 import gg.hoglin.sdk.models.visualization.ImportedSnapshotEvaluation;
 import gg.hoglin.sdk.models.visualization.SnapshotImport;
-import gg.hoglin.sdk.strategy.HoglinRetryStrategy;
 import gg.hoglin.sdk.serialization.HoglinAdapter;
+import gg.hoglin.sdk.strategy.HoglinRetryStrategy;
 import gg.hoglin.sdk.task.AnalyticBatchTask;
-import kong.unirest.core.*;
-import lombok.*;
+import gg.hoglin.sdk.task.ExperimentFetchTask;
+import kong.unirest.core.Config;
+import kong.unirest.core.HttpResponse;
+import kong.unirest.core.RequestBodyEntity;
+import kong.unirest.core.UnirestInstance;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.ToString;
 import lombok.experimental.Accessors;
+import org.apache.commons.codec.digest.MurmurHash3;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -24,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.WillClose;
 import java.io.Closeable;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
@@ -58,6 +67,11 @@ public class Hoglin implements Closeable {
     @NotNull private String serverKey;
 
     /**
+     * Whether to auto-flush events periodically
+     */
+    @Builder.Default private boolean enableAutoFlush = true;
+
+    /**
      * How often (ms) to send queued events
      */
     @Builder.Default private long autoFlushInterval = 15000;
@@ -68,9 +82,14 @@ public class Hoglin implements Closeable {
     @Builder.Default private int maxBatchSize = 10000;
 
     /**
-     * Whether to auto-flush events
+     * Whether to auto-fetch experiments periodically
      */
-    @Builder.Default private boolean enableAutoFlush = true;
+    @Builder.Default private boolean enableAutoExperimentFetch = true;
+
+    /**
+     * How often (ms) to refresh the experiment cache
+     */
+    @Builder.Default private long autoExperimentFetchInterval = 60000;
 
     /**
      * Whether to requeue failed flushes. When true, if a flush fails (network failure, server error, etc.), all the
@@ -102,11 +121,23 @@ public class Hoglin implements Closeable {
     @ToString.Exclude
     @Builder.Default @NotNull private Gson gson = createDefaultGson();
 
+    /**
+     * The event queue for storing recorded analytics before they are sent to the Hoglin API
+     */
     @ToString.Exclude
     private final Queue<RecordedAnalytic<?>> eventQueue = new LinkedList<>();
 
     @ToString.Exclude
+    @Getter(AccessLevel.NONE)
+    private final Map<String, ExperimentData> experimentCache = new ConcurrentHashMap<>();
+
+    @ToString.Exclude
+    @Getter(AccessLevel.NONE)
     private @Nullable ScheduledFuture<?> autoFlushTask = null;
+
+    @ToString.Exclude
+    @Getter(AccessLevel.NONE)
+    private @Nullable ScheduledFuture<?> experimentFetchTask = null;
 
     private boolean closed = false;
 
@@ -118,6 +149,10 @@ public class Hoglin implements Closeable {
         if (enableAutoFlush) {
             autoFlushTask = executor.scheduleAtFixedRate(new AnalyticBatchTask(this), autoFlushInterval, autoFlushInterval, TimeUnit.MILLISECONDS);
         }
+
+        if (enableAutoExperimentFetch) {
+            experimentFetchTask = executor.scheduleAtFixedRate(new ExperimentFetchTask(this), autoExperimentFetchInterval, autoExperimentFetchInterval, TimeUnit.MILLISECONDS);
+        }
     }
 
     /**
@@ -126,7 +161,7 @@ public class Hoglin implements Closeable {
      * @param apiKey The API key for Hoglin
      * @return A new Hoglin instance
      */
-    public static HoglinBuilder builder(@NotNull String apiKey) {
+    public static HoglinBuilder builder(@NotNull final String apiKey) {
         return new HoglinBuilder().serverKey(apiKey);
     }
 
@@ -134,7 +169,7 @@ public class Hoglin implements Closeable {
      * Flushes the event queue immediately. This method is typically used to ensure that all pending events are sent
      * to the Hoglin API without waiting for the auto-flush interval and being limited by the max batch size
      *
-     * @apiNote this method makes a blocking http request
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @return The {@link HttpResponse} from the Hoglin API, or null if there are no queued events (no request would've
      * been made)
      */
@@ -145,6 +180,37 @@ public class Hoglin implements Closeable {
         }
 
         return _flush();
+    }
+
+    /**
+     * Manually instantly refreshes the experiment cache by fetching the latest experiment data from the Hoglin API.
+     *
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
+     */
+    @Blocking
+    public void refreshExperimentCache() {
+        final HttpResponse<String> response = httpClient.get("/experiments/" + serverKey)
+            .asString();
+
+        if (!response.isSuccess()) {
+            logger.error("Failed to refresh experiment cache: {}", response.getBody());
+        }
+
+        final ExperimentData[] experiments = gson.fromJson(response.getBody(), ExperimentData[].class);
+        experimentCache.clear();
+
+        for (final ExperimentData experiment : experiments) {
+            experimentCache.put(experiment.getExperimentId(), experiment);
+        }
+    }
+
+    /**
+     * Gets an unmodifiable view of the current experiment cache.
+     *
+     * @return An unmodifiable map of experiment IDs to their corresponding {@link ExperimentData}
+     */
+    public Map<String, ExperimentData> getExperiments() {
+        return Collections.unmodifiableMap(experimentCache);
     }
 
     private @Nullable HttpResponse<String> _flush() {
@@ -250,6 +316,7 @@ public class Hoglin implements Closeable {
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
      */
+    @Blocking
     public HttpResponse<String> importSnapshot(final UUID snapshotId, @Nullable final String name, @Nullable final Boolean preventDuplicate) {
         if (closed) {
             throw new IllegalStateException("Attempted to import visualization snapshot whilst closed");
@@ -272,6 +339,7 @@ public class Hoglin implements Closeable {
      * @see #importSnapshot(UUID, String, Boolean) for more options
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
      */
+    @Blocking
     public HttpResponse<String> importSnapshot(final UUID snapshotId, @Nullable final Boolean preventDuplicate) {
         return importSnapshot(snapshotId, null, preventDuplicate);
     }
@@ -285,6 +353,7 @@ public class Hoglin implements Closeable {
      * @see #importSnapshot(UUID, String, Boolean) for more options
      * @return the {@link HttpResponse} from the Hoglin API for any further handling
      */
+    @Blocking
     public HttpResponse<String> importSnapshot(final UUID snapshotId, @Nullable final String name) {
         return importSnapshot(snapshotId, name, false);
     }
@@ -313,6 +382,7 @@ public class Hoglin implements Closeable {
      * @see #getImportedSnapshotInfo(UUID)
      * @return true if this Hoglin instance has a visualization imported from the specified snapshot, false otherwise
      */
+    @Blocking
     public boolean isSnapshotImported(final UUID snapshotId) {
         final @Nullable ImportedSnapshotEvaluation evaluation = getImportedSnapshotInfo(snapshotId);
         if (evaluation == null) {
@@ -335,6 +405,7 @@ public class Hoglin implements Closeable {
      * @see #getImportedSnapshotInfoRaw(UUID)
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      */
+    @Blocking
     public @Nullable ImportedSnapshotEvaluation getImportedSnapshotInfo(final UUID snapshotId) {
         final HttpResponse<String> response = getImportedSnapshotInfoRaw(snapshotId);
         if (!response.isSuccess()) {
@@ -357,6 +428,7 @@ public class Hoglin implements Closeable {
      * @see #getImportedSnapshotInfo(UUID)
      * @apiNote This makes a blocking HTTP request to the Hoglin API
      */
+    @Blocking
     public HttpResponse<String> getImportedSnapshotInfoRaw(final UUID snapshotId) {
         if (closed) {
             throw new IllegalStateException("Attempted to get imported snapshot info whilst closed");
@@ -367,20 +439,23 @@ public class Hoglin implements Closeable {
 
     /**
      * <p>Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
-     * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100.</p>
+     * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100. For player-specific
+     * evaluations, see {@link Hoglin#evaluateExperiment(String, UUID)}</p>
      *
-     * <p>This is a safe evaluation. If the request to evaluate the experiment fails (invalid experiment id, network
-     * error, etc), this method will just return false, with a log in the console. If you would like to handle the
-     * response manually, look at {@link Hoglin#evaluateExperimentRaw(String)}</p>
+     * <p>This is a safe evaluation. If the specified experiment ID cannot be resolved (is not in the cache), this
+     * method will just return false, with a log in the console. If you would like to manually check if the experiment
+     * exists, you should use {@link Hoglin#getExperiments()} beforehand</p>
      *
      * @param experimentId the ID of the experiment to evaluate
-     * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #getExperimentSafe(String, UUID)
-     * @see #evaluateExperimentRaw(String)
+     * @see #evaluateExperiment(String, UUID)
+     * @see #getExperiments()
      * @return true if this instance is part of the experiment, false otherwise
      */
     public boolean evaluateExperiment(final String experimentId) {
-        return getExperimentSafe(experimentId, null);
+        final ExperimentData experiment = experimentCache.get(experimentId);
+        if (experiment == null) return false;
+
+        return experiment.getRolloutPercentage() >= 100;
     }
 
     /**
@@ -388,93 +463,29 @@ public class Hoglin implements Closeable {
      * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
      * rollout percentage.</p>
      *
-     * <p>This is a safe evaluation. If the request to evaluate the experiment fails (invalid experiment id, network
-     * error, etc), this method will just return false, with a log in the console. If you would like to handle the
-     * response manually, look at {@link Hoglin#evaluateExperimentRaw(String, UUID)}  </p>
+     * <p>This is a safe evaluation. If the specified experiment ID cannot be resolved (is not in the cache), this
+     * method will just return false, with a log in the console. If you would like to manually check if the experiment
+     * exists, you should use {@link Hoglin#getExperiments()} beforehand</p>
      *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
-     * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #getExperimentSafe(String, UUID)
-     * @see #evaluateExperimentRaw(String, UUID)
+     * @see #getExperiments()
      * @return true if the player is part of the experiment, false otherwise
      */
     public boolean evaluateExperiment(final String experimentId, @NotNull final UUID playerUUID) {
-        return getExperimentSafe(experimentId, playerUUID);
-    }
+        final ExperimentData experiment = experimentCache.get(experimentId);
+        if (experiment == null) return false;
 
-
-    /**
-     * <p>Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
-     * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100.</p>
-     *
-     * <p>This method returns the raw response from the Hoglin API, allowing you to handle errors yourself. Alternatively,
-     * to default to false when an error occurs, you may use {@link Hoglin#evaluateExperiment(String)}</p>
-     *
-     * @param experimentId the ID of the experiment to evaluate
-     * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #getExperimentRaw(String, UUID)
-     * @see #evaluateExperiment(String)
-     * @return the raw {@link HttpResponse} from the experiment evaluation call to Hoglin API
-     */
-    public HttpResponse<Boolean> evaluateExperimentRaw(final String experimentId) {
-        return getExperimentRaw(experimentId, null);
-    }
-
-    /**
-     * <p>Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
-     * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
-     * rollout percentage.</p>
-     *
-     * <p>This method returns the raw response from the Hoglin API, allowing you to handle errors yourself. Alternatively,
-     * to default to false when an error occurs, you may use {@link Hoglin#evaluateExperiment(String, UUID)}</p>
-     *
-     * @param experimentId the ID of the experiment to evaluate
-     * @param playerUUID the UUID of the player to evaluate the experiment for
-     * @apiNote This makes a blocking HTTP request to the Hoglin API
-     * @see #getExperimentRaw(String, UUID)
-     * @see #evaluateExperiment(String, UUID)
-     * @return the raw {@link HttpResponse} from the experiment evaluation call to Hoglin API
-     */
-    public HttpResponse<Boolean> evaluateExperimentRaw(final String experimentId, @NotNull final UUID playerUUID) {
-        return getExperimentRaw(experimentId, playerUUID);
-    }
-
-    private boolean getExperimentSafe(final String experimentId, @Nullable final UUID playerUUID) {
-        if (closed) {
-            throw new IllegalStateException("Attempted to evaluate experiment whilst closed");
+        if (experiment.getAllowlist().contains(playerUUID)) {
+            return true;
         }
 
-        final GetRequest request = httpClient.get("/experiments/" + serverKey + "/" + experimentId + "/evaluate");
+        final int maxBucket = (int) ((experiment.getRolloutPercentage() / 100.0) * 10000);
+        final byte[] bytes = (experiment.getId() + ":" + playerUUID).getBytes(StandardCharsets.UTF_8);
+        final long hash = MurmurHash3.hash32x86(bytes) & 0xffffffffL;
+        final long bucketValue = hash % 10000L;
 
-        if (playerUUID != null) {
-            request.queryString("playerUUID", playerUUID.toString());
-        }
-
-        final HttpResponse<String> response = request.asString();
-        if (!response.isSuccess()) {
-            logger.error("Failed to evaluate experiment '{}', defaulting to false. {}",
-                experimentId, contructErrorDescription(response)
-            );
-            return false;
-        }
-
-        final ExperimentEvaluation evaluation = gson.fromJson(response.getBody(), ExperimentEvaluation.class);
-        return evaluation.isInExperiment();
-    }
-
-    private HttpResponse<Boolean> getExperimentRaw(final String experimentId, @Nullable final UUID playerUUID) {
-        if (closed) {
-            throw new IllegalStateException("Attempted to evaluate experiment whilst closed");
-        }
-
-        final GetRequest request = httpClient.get("/experiments/" + serverKey + "/" + experimentId + "/evaluate");
-
-        if (playerUUID != null) {
-            request.queryString("playerUUID", playerUUID.toString());
-        }
-
-        return request.asObject(Boolean.class);
+        return bucketValue < maxBucket;
     }
 
     /**
@@ -522,8 +533,9 @@ public class Hoglin implements Closeable {
      * no more requests from the Hoglin API can be made (eg: evaluating experiments). An example of when to use this
      * is for on server/application shutdown.
      *
-     * @apiNote this method makes a blocking http request
+     * @apiNote This makes a blocking HTTP request to the Hoglin API
      */
+    @Blocking
     @Override
     public void close() {
         if (closed) return;
