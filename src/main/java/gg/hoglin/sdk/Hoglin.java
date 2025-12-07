@@ -23,7 +23,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 import lombok.experimental.Accessors;
-import org.apache.commons.codec.digest.MurmurHash3;
 import org.jetbrains.annotations.Blocking;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -32,7 +31,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.WillClose;
 import java.io.Closeable;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
@@ -444,18 +442,20 @@ public class Hoglin implements Closeable {
      *
      * <p>This is a safe evaluation. If the specified experiment ID cannot be resolved (is not in the cache), this
      * method will just return false, with a log in the console. If you would like to manually check if the experiment
-     * exists, you should use {@link Hoglin#getExperiments()} beforehand</p>
+     * exists, you should use {@link Hoglin#getExperiments()} beforehand. You may also consider using
+     * {@link ExperimentData#evaluate()} to bypass the cache check.</p>
      *
      * @param experimentId the ID of the experiment to evaluate
      * @see #evaluateExperiment(String, UUID)
      * @see #getExperiments()
+     * @see ExperimentData#evaluate()
      * @return true if this instance is part of the experiment, false otherwise
      */
     public boolean evaluateExperiment(final String experimentId) {
         final ExperimentData experiment = experimentCache.get(experimentId);
         if (experiment == null) return false;
 
-        return experiment.getRolloutPercentage() >= 100;
+        return experiment.evaluate();
     }
 
     /**
@@ -465,7 +465,8 @@ public class Hoglin implements Closeable {
      *
      * <p>This is a safe evaluation. If the specified experiment ID cannot be resolved (is not in the cache), this
      * method will just return false, with a log in the console. If you would like to manually check if the experiment
-     * exists, you should use {@link Hoglin#getExperiments()} beforehand</p>
+     * exists, you should use {@link Hoglin#getExperiments()} beforehand. You may also consider using
+     * {@link ExperimentData#evaluate(UUID)} to bypass the cache check.</p>
      *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
@@ -476,16 +477,7 @@ public class Hoglin implements Closeable {
         final ExperimentData experiment = experimentCache.get(experimentId);
         if (experiment == null) return false;
 
-        if (experiment.getAllowlist().contains(playerUUID)) {
-            return true;
-        }
-
-        final int maxBucket = (int) ((experiment.getRolloutPercentage() / 100.0) * 10000);
-        final byte[] bytes = (experiment.getId() + ":" + playerUUID).getBytes(StandardCharsets.UTF_8);
-        final long hash = MurmurHash3.hash32x86(bytes) & 0xffffffffL;
-        final long bucketValue = hash % 10000L;
-
-        return bucketValue < maxBucket;
+        return experiment.evaluate(playerUUID);
     }
 
     /**
