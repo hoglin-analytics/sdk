@@ -41,9 +41,9 @@ public class AnalyticBatchTask implements Runnable {
             if (response.isSuccess()) return;
             if (hoglin.requeueFailedFlushes()) {
                 hoglin.trackMany(events);
-                logger.error("Failed to flush {} queued events, added back to the end of the queue: {}", take, hoglin.contructErrorDescription(response));
+                logger.error("Failed to flush {} queued events, added back to the end of the queue: {}", take, hoglin.constructErrorDescription(response));
             } else {
-                logger.error("Failed to flush {} queued events: {}", take, hoglin.contructErrorDescription(response));
+                logger.error("Failed to flush {} queued events: {}", take, hoglin.constructErrorDescription(response));
             }
         });
     }

@@ -409,7 +409,7 @@ public class Hoglin implements Closeable {
     public @Nullable ImportedSnapshotEvaluation getImportedSnapshotInfo(final UUID snapshotId) {
         final HttpResponse<String> response = getImportedSnapshotInfoRaw(snapshotId);
         if (!response.isSuccess()) {
-            logger.error("Failed to get imported snapshot info: {}", contructErrorDescription(response));
+            logger.error("Failed to get imported snapshot info: {}", constructErrorDescription(response));
             return new ImportedSnapshotEvaluation(false, null);
         }
 
@@ -494,7 +494,7 @@ public class Hoglin implements Closeable {
      * @param response the HTTP response containing the error
      * @return a string description of the error, including the HTTP status and any parsed error details
      */
-    public String contructErrorDescription(final HttpResponse<String> response) {
+    public String constructErrorDescription(final HttpResponse<String> response) {
         final String httpStatus = "(HTTP " + response.getStatus()+ "): ";
         try {
             final ApiErrorResponse error = gson.fromJson(response.getBody(), ApiErrorResponse.class);
@@ -528,9 +528,9 @@ public class Hoglin implements Closeable {
     }
 
     /**
-     * Gracefully stops all SDK tasks. This involves flushing the entire remaining event queue in one big batch,
-     * bypassing the max batch size parameter. Additionally, after calling this no more events can be queued, and
-     * no more requests from the Hoglin API can be made (eg: evaluating experiments). An example of when to use this
+     * Gracefully stops all SDK tasks. This involves flushing the entire remaining event queue in one big batch
+     * bypassing the max batch size parameter. Additionally, after calling this, no more events can be queued, and
+     * no more requests from the Hoglin API can be made (e.g.: evaluating experiments). An example of when to use this
      * is for on server/application shutdown.
      *
      * @apiNote This makes a blocking HTTP request to the Hoglin API
@@ -548,7 +548,7 @@ public class Hoglin implements Closeable {
         final int take = eventQueue.size();
         final HttpResponse<String> response = _flush();
         if (response != null && !response.isSuccess()) {
-            logger.error("Failed to flush {} queued events while closing: {}", take, contructErrorDescription(response));
+            logger.error("Failed to flush {} queued events while closing: {}", take, constructErrorDescription(response));
         }
 
         httpClient.close();
