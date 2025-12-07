@@ -30,7 +30,7 @@ repositories {
 }
 
 dependencies {
-    implementation("gg.hoglin:sdk:1.0.10")
+    implementation("gg.hoglin:sdk:1.2.0")
 }
 ```
 
@@ -48,7 +48,7 @@ Maven `pom.xml`
     <dependency>
         <groupId>gg.hoglin</groupId>
         <artifactId>sdk</artifactId>
-        <version>1.0.10</version>
+        <version>1.2.0</version>
     </dependency>
 </dependencies>
 ```
