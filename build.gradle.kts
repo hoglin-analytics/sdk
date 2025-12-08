@@ -1,3 +1,4 @@
+import org.gradle.internal.serialize.graph.codec
 import java.net.URI
 
 plugins {
@@ -8,7 +9,7 @@ plugins {
 }
 
 group = "gg.hoglin"
-version = "1.1.1"
+version = "1.2.0"
 
 repositories {
     mavenCentral()
@@ -19,6 +20,7 @@ dependencies {
     implementation(libs.unirest.core)
     implementation(libs.unirest.gson)
     implementation(libs.slf4j)
+    implementation(libs.commons.codec)
     compileOnly(libs.lombok)
     compileOnly(libs.jetbrains.annotations)
     compileOnly(libs.autoservice)

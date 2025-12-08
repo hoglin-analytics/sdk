@@ -6,6 +6,7 @@ unirest = "4.4.5"
 jetbrains-annotations = "24.0.0"
 autoservice = "1.1.1"
 slf4j = "2.0.17"
+commons-codec = "1.20.0"
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
@@ -18,3 +19,4 @@ unirest-gson = { module = "com.konghq:unirest-modules-gson", version.ref = "unir
 jetbrains-annotations = { module = "org.jetbrains:annotations", version.ref = "jetbrains-annotations" }
 autoservice = { module = "com.google.auto.service:auto-service", version.ref = "autoservice" }
 slf4j = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+commons-codec = { module = "commons-codec:commons-codec", version.ref = "commons-codec" }

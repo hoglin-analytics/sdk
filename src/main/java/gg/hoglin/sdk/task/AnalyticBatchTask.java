@@ -2,7 +2,6 @@ package gg.hoglin.sdk.task;
 
 import gg.hoglin.sdk.Hoglin;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
-import kong.unirest.core.HttpResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +19,6 @@ public class AnalyticBatchTask implements Runnable {
     private final Hoglin hoglin;
 
     @Override
-    @SuppressWarnings("resource")
     public void run() {
         final int take = Math.min(hoglin.maxBatchSize(), hoglin.eventQueue().size());
         if (take == 0) {
@@ -43,9 +41,9 @@ public class AnalyticBatchTask implements Runnable {
             if (response.isSuccess()) return;
             if (hoglin.requeueFailedFlushes()) {
                 hoglin.trackMany(events);
-                logger.error("Failed to flush {} queued events, added back to the end of the queue: {}", take, hoglin.contructErrorDescription(response));
+                logger.error("Failed to flush {} queued events, added back to the end of the queue: {}", take, hoglin.constructErrorDescription(response));
             } else {
-                logger.error("Failed to flush {} queued events: {}", take, hoglin.contructErrorDescription(response));
+                logger.error("Failed to flush {} queued events: {}", take, hoglin.constructErrorDescription(response));
             }
         });
     }
