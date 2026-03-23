@@ -10,6 +10,7 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -56,6 +57,16 @@ public class ExperimentData {
     /** An allowlist of UUIDs that have access to this experiment */
     @NotNull
     private final List<UUID> allowlist;
+
+    /** The trigger for the experiment */
+    @NotNull
+    @SerializedName("experiment_trigger")
+    private final String trigger;
+
+    /** The actions taken for variants of the experiment */
+    @NotNull
+    @SerializedName("experiment_variants")
+    private final Map<ExperimentVariant.Variant, ExperimentVariant> variants;
 
     /**
      * Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific

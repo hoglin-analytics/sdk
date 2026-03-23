@@ -130,6 +130,13 @@ public class Hoglin implements Closeable {
     @Getter(AccessLevel.NONE)
     private final Map<String, ExperimentData> experimentCache = new ConcurrentHashMap<>();
 
+    /**
+     * Cache for tracking which group a player is in for an experiment. Will be replaced with a better cache later.
+     */
+    @ToString.Exclude
+    @Getter(AccessLevel.NONE)
+    private final Map<UUID, Map<String, Boolean>> participationCache = new ConcurrentHashMap<>();
+
     @ToString.Exclude
     @Getter(AccessLevel.NONE)
     private @Nullable ScheduledFuture<?> autoFlushTask = null;
@@ -473,16 +480,59 @@ public class Hoglin implements Closeable {
      * @see #getExperiments()
      * @return true if the player is part of the experiment, false otherwise
      */
-    @Blocking
     public boolean evaluateExperiment(final String experimentId, @NotNull final UUID playerUUID) {
-        final HttpResponse<String> response =
-                httpClient.get("/experiments/" + serverKey + "/" + experimentId + "/evalulate?playerUUID=" + playerUUID).asString();
+        // Check cache first
+        Map<String, Boolean> participationMap = participationCache.get(playerUUID);
+        if (participationMap != null) {
+            Boolean participation = participationMap.get(experimentId);
+            if (participation != null) {
+                return participation;
+            }
+        }
+
+        // If cache miss, do a request
+        final HttpResponse<String> response = evaluateExperimentRaw(experimentId, playerUUID);
         if (!response.isSuccess()) {
             logger.error("Failed to evaluate experiment {} for player {}: {}", experimentId, playerUUID, constructErrorDescription(response));
             return false;
         }
         ExperimentEvaluationResponse expEvalResp = gson.fromJson(response.getBody(), ExperimentEvaluationResponse.class);
+
+        // Add to cache
+        Map<String, Boolean> map = participationCache.computeIfAbsent(playerUUID, k -> new HashMap<>());
+        map.put(experimentId, expEvalResp.getInExperiment());
+
         return expEvalResp.getInExperiment();
+    }
+
+    /**
+     * <p>Prunes the participation cache of players who are no longer online. Should be run periodically.</p>
+     *
+     * @param onlinePlayers a list of UUIDs of online players
+     */
+    public void pruneParticipationCache(final List<UUID> onlinePlayers) {
+        onlinePlayers.forEach(participationCache::remove);
+    }
+
+    /**
+     * <p>Removes a player from the experiment participation cache. Should be fired when a player quits.</p>
+     *
+     * @param playerUUID the UUID of the player to remove from cache
+     */
+    public void removePlayerFromCache(final UUID playerUUID) {
+        participationCache.remove(playerUUID);
+    }
+
+    /**
+     * <p>Evaluates whether the player is part of the specified experiment.</p>
+     *
+     * @param experimentId the ID of the experiment to evaluate
+     * @param playerUUID the UUID of the player to evaluate the experiment for
+     * @return the raw JSON response for whether the player is in the A or B group (via inExperiment key)
+     */
+    @Blocking
+    public HttpResponse<String> evaluateExperimentRaw(final String experimentId, final UUID playerUUID) {
+        return httpClient.get("/experiments/" + serverKey + "/" + experimentId + "/evaluate?playerUUID=" + playerUUID).asString();
     }
 
     /**
