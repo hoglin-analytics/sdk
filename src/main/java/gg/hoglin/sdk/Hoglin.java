@@ -8,6 +8,7 @@ import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import gg.hoglin.sdk.models.error.ApiErrorResponse;
 import gg.hoglin.sdk.models.experiment.ExperimentData;
+import gg.hoglin.sdk.models.experiment.ExperimentEvaluationResponse;
 import gg.hoglin.sdk.models.visualization.ImportedSnapshotEvaluation;
 import gg.hoglin.sdk.models.visualization.SnapshotImport;
 import gg.hoglin.sdk.serialization.HoglinAdapter;
@@ -461,23 +462,27 @@ public class Hoglin implements Closeable {
     /**
      * <p>Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
      * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
-     * rollout percentage.</p>
+     * rollout percentage, as determined by the API.</p>
      *
      * <p>This is a safe evaluation. If the specified experiment ID cannot be resolved (is not in the cache), this
      * method will just return false, with a log in the console. If you would like to manually check if the experiment
-     * exists, you should use {@link Hoglin#getExperiments()} beforehand. You may also consider using
-     * {@link ExperimentData#evaluate(UUID)} to bypass the cache check.</p>
+     * exists, you should use {@link Hoglin#getExperiments()} beforehand.
      *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
      * @see #getExperiments()
      * @return true if the player is part of the experiment, false otherwise
      */
+    @Blocking
     public boolean evaluateExperiment(final String experimentId, @NotNull final UUID playerUUID) {
-        final ExperimentData experiment = experimentCache.get(experimentId);
-        if (experiment == null) return false;
-
-        return experiment.evaluate(playerUUID);
+        final HttpResponse<String> response =
+                httpClient.get("/experiments/" + serverKey + "/" + experimentId + "/evalulate?playerUUID=" + playerUUID).asString();
+        if (!response.isSuccess()) {
+            logger.error("Failed to evaluate experiment {} for player {}: {}", experimentId, playerUUID, constructErrorDescription(response));
+            return false;
+        }
+        ExperimentEvaluationResponse expEvalResp = gson.fromJson(response.getBody(), ExperimentEvaluationResponse.class);
+        return expEvalResp.getInExperiment();
     }
 
     /**

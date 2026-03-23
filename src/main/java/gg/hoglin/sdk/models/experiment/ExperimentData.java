@@ -1,6 +1,7 @@
 package gg.hoglin.sdk.models.experiment;
 
 import com.google.gson.annotations.SerializedName;
+import gg.hoglin.sdk.Hoglin;
 import lombok.Data;
 import org.apache.commons.codec.digest.MurmurHash3;
 import org.jetbrains.annotations.NotNull;
@@ -68,6 +69,9 @@ public class ExperimentData {
     }
 
     /**
+     * @deprecated Use {@link Hoglin#evaluateExperiment(String, UUID)} instead of this as the API side
+     * should be the authoritative source for A/B assignment.
+     * <p>
      * Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
      * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
      * rollout percentage.
@@ -75,6 +79,7 @@ public class ExperimentData {
      * @param playerUUID The UUID of the player to evaluate the experiment for
      * @return true if the player is part of the experiment, false otherwise
      */
+    @Deprecated
     public final boolean evaluate(final UUID playerUUID) {
         if (allowlist.contains(playerUUID)) {
             return true;
