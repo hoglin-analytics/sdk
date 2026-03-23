@@ -519,8 +519,19 @@ public class Hoglin implements Closeable {
      *
      * @param playerUUID the UUID of the player to remove from cache
      */
-    public void removePlayerFromCache(final UUID playerUUID) {
+    public void removePlayerFromExperimentCache(final UUID playerUUID) {
         participationCache.remove(playerUUID);
+    }
+
+    /**
+     * <p>Adds a player to the participation cache. Should be fired when a player joins.</p>
+     *
+     * @param playerUUID the UUID of the player to add to cache
+     */
+    public void addPlayerToExperimentCache(final UUID playerUUID) {
+        experimentCache.forEach((id, data) -> {
+            evaluateExperiment(id, playerUUID);
+        });
     }
 
     /**
