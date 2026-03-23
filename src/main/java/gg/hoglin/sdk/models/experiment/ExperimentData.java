@@ -18,6 +18,20 @@ import java.util.UUID;
  */
 @Data
 public class ExperimentData {
+
+    /** Experiment triggers */
+    public enum Trigger {
+        @SerializedName("join")
+        JOIN,
+        @SerializedName("first_join")
+        FIRST_JOIN,
+        @SerializedName("purchase")
+        PURCHASE,
+        // This type is not yet implemented on the API side
+        @SerializedName("custom")
+        CUSTOM,
+    }
+
     /** The internal numerical ID for this experiment */
     @NotNull
     private final Integer id;
@@ -61,7 +75,7 @@ public class ExperimentData {
     /** The trigger for the experiment */
     @NotNull
     @SerializedName("experiment_trigger")
-    private final String trigger;
+    private final Trigger trigger;
 
     /** The actions taken for variants of the experiment */
     @NotNull
