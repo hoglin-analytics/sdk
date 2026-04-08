@@ -499,7 +499,7 @@ public class Hoglin implements Closeable {
         ExperimentEvaluationResponse expEvalResp = gson.fromJson(response.getBody(), ExperimentEvaluationResponse.class);
 
         // Add to cache
-        Map<String, Boolean> map = participationCache.computeIfAbsent(playerUUID, k -> new HashMap<>());
+        Map<String, Boolean> map = participationCache.computeIfAbsent(playerUUID, k -> new ConcurrentHashMap<>());
         map.put(experimentId, expEvalResp.getInExperiment());
 
         return expEvalResp.getInExperiment();
@@ -511,7 +511,7 @@ public class Hoglin implements Closeable {
      * @param onlinePlayers a list of UUIDs of online players
      */
     public void pruneParticipationCache(final List<UUID> onlinePlayers) {
-        onlinePlayers.forEach(participationCache::remove);
+        participationCache.keySet().retainAll(onlinePlayers);
     }
 
     /**
