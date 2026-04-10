@@ -8,6 +8,7 @@ import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import gg.hoglin.sdk.models.error.ApiErrorResponse;
 import gg.hoglin.sdk.models.experiment.ExperimentData;
+import gg.hoglin.sdk.models.experiment.ExperimentEvaluationResponse;
 import gg.hoglin.sdk.models.visualization.ImportedSnapshotEvaluation;
 import gg.hoglin.sdk.models.visualization.SnapshotImport;
 import gg.hoglin.sdk.serialization.HoglinAdapter;
@@ -128,6 +129,13 @@ public class Hoglin implements Closeable {
     @ToString.Exclude
     @Getter(AccessLevel.NONE)
     private final Map<String, ExperimentData> experimentCache = new ConcurrentHashMap<>();
+
+    /**
+     * Cache for tracking which group a player is in for an experiment. Will be replaced with a better cache later.
+     */
+    @ToString.Exclude
+    @Getter(AccessLevel.NONE)
+    private final Map<UUID, Map<String, Boolean>> participationCache = new ConcurrentHashMap<>();
 
     @ToString.Exclude
     @Getter(AccessLevel.NONE)
@@ -461,12 +469,11 @@ public class Hoglin implements Closeable {
     /**
      * <p>Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
      * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
-     * rollout percentage.</p>
+     * rollout percentage, as determined by the API.</p>
      *
      * <p>This is a safe evaluation. If the specified experiment ID cannot be resolved (is not in the cache), this
      * method will just return false, with a log in the console. If you would like to manually check if the experiment
-     * exists, you should use {@link Hoglin#getExperiments()} beforehand. You may also consider using
-     * {@link ExperimentData#evaluate(UUID)} to bypass the cache check.</p>
+     * exists, you should use {@link Hoglin#getExperiments()} beforehand.
      *
      * @param experimentId the ID of the experiment to evaluate
      * @param playerUUID the UUID of the player to evaluate the experiment for
@@ -474,10 +481,69 @@ public class Hoglin implements Closeable {
      * @return true if the player is part of the experiment, false otherwise
      */
     public boolean evaluateExperiment(final String experimentId, @NotNull final UUID playerUUID) {
-        final ExperimentData experiment = experimentCache.get(experimentId);
-        if (experiment == null) return false;
+        // Check cache first
+        Map<String, Boolean> participationMap = participationCache.get(playerUUID);
+        if (participationMap != null) {
+            Boolean participation = participationMap.get(experimentId);
+            if (participation != null) {
+                return participation;
+            }
+        }
 
-        return experiment.evaluate(playerUUID);
+        // If cache miss, do a request
+        final HttpResponse<String> response = evaluateExperimentRaw(experimentId, playerUUID);
+        if (!response.isSuccess()) {
+            logger.error("Failed to evaluate experiment {} for player {}: {}", experimentId, playerUUID, constructErrorDescription(response));
+            return false;
+        }
+        ExperimentEvaluationResponse expEvalResp = gson.fromJson(response.getBody(), ExperimentEvaluationResponse.class);
+
+        // Add to cache
+        Map<String, Boolean> map = participationCache.computeIfAbsent(playerUUID, k -> new ConcurrentHashMap<>());
+        map.put(experimentId, expEvalResp.getInExperiment());
+
+        return expEvalResp.getInExperiment();
+    }
+
+    /**
+     * <p>Prunes the participation cache of players who are no longer online. Should be run periodically.</p>
+     *
+     * @param onlinePlayers a list of UUIDs of online players
+     */
+    public void pruneParticipationCache(final List<UUID> onlinePlayers) {
+        participationCache.keySet().retainAll(onlinePlayers);
+    }
+
+    /**
+     * <p>Removes a player from the experiment participation cache. Should be fired when a player quits.</p>
+     *
+     * @param playerUUID the UUID of the player to remove from cache
+     */
+    public void removePlayerFromExperimentCache(final UUID playerUUID) {
+        participationCache.remove(playerUUID);
+    }
+
+    /**
+     * <p>Adds a player to the participation cache. Should be fired when a player joins.</p>
+     *
+     * @param playerUUID the UUID of the player to add to cache
+     */
+    public void addPlayerToExperimentCache(final UUID playerUUID) {
+        experimentCache.forEach((id, data) -> {
+            evaluateExperiment(id, playerUUID);
+        });
+    }
+
+    /**
+     * <p>Evaluates whether the player is part of the specified experiment.</p>
+     *
+     * @param experimentId the ID of the experiment to evaluate
+     * @param playerUUID the UUID of the player to evaluate the experiment for
+     * @return the raw JSON response for whether the player is in the A or B group (via inExperiment key)
+     */
+    @Blocking
+    public HttpResponse<String> evaluateExperimentRaw(final String experimentId, final UUID playerUUID) {
+        return httpClient.get("/experiments/" + serverKey + "/" + experimentId + "/evaluate?playerUUID=" + playerUUID).asString();
     }
 
     /**

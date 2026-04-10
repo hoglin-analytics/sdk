@@ -1,6 +1,7 @@
 package gg.hoglin.sdk.models.experiment;
 
 import com.google.gson.annotations.SerializedName;
+import gg.hoglin.sdk.Hoglin;
 import lombok.Data;
 import org.apache.commons.codec.digest.MurmurHash3;
 import org.jetbrains.annotations.NotNull;
@@ -9,6 +10,7 @@ import org.jetbrains.annotations.Nullable;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -16,6 +18,20 @@ import java.util.UUID;
  */
 @Data
 public class ExperimentData {
+
+    /** Experiment triggers */
+    public enum Trigger {
+        @SerializedName("join")
+        JOIN,
+        @SerializedName("first_join")
+        FIRST_JOIN,
+        @SerializedName("purchase")
+        PURCHASE,
+        // This type is not yet implemented on the API side
+        @SerializedName("custom")
+        CUSTOM,
+    }
+
     /** The internal numerical ID for this experiment */
     @NotNull
     private final Integer id;
@@ -56,6 +72,16 @@ public class ExperimentData {
     @NotNull
     private final List<UUID> allowlist;
 
+    /** The trigger for the experiment */
+    @NotNull
+    @SerializedName("experiment_trigger")
+    private final Trigger trigger;
+
+    /** The actions taken for variants of the experiment */
+    @NotNull
+    @SerializedName("experiment_variants")
+    private final Map<ExperimentVariant.Variant, ExperimentVariant> variants;
+
     /**
      * Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
      * experiment evaluation and will only evaluate as true if its rollout percentage is set to 100. For player-specific
@@ -68,6 +94,9 @@ public class ExperimentData {
     }
 
     /**
+     * @deprecated Use {@link Hoglin#evaluateExperiment(String, UUID)} instead of this as the API side
+     * should be the authoritative source for A/B assignment.
+     * <p>
      * Evaluates whether the player is part of the specified experiment. Unless the player is specifically added to the
      * allowlist for an experiment, they will randomly be pre-selected to be a part of it based on the experiment's
      * rollout percentage.
@@ -75,6 +104,7 @@ public class ExperimentData {
      * @param playerUUID The UUID of the player to evaluate the experiment for
      * @return true if the player is part of the experiment, false otherwise
      */
+    @Deprecated
     public final boolean evaluate(final UUID playerUUID) {
         if (allowlist.contains(playerUUID)) {
             return true;
