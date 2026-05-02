@@ -1,5 +1,6 @@
 package gg.hoglin.sdk.task;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import gg.hoglin.sdk.Hoglin;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
 import lombok.RequiredArgsConstructor;
@@ -34,9 +35,15 @@ public class AnalyticBatchTask implements Runnable {
         }
 
         CompletableFuture.supplyAsync(() ->
-            hoglin.httpClient().put("/analytics/" + hoglin.serverKey())
-                .body(hoglin.gson().toJson(events))
-                .asString(), hoglin.executor()
+                {
+                    try {
+                        return hoglin.httpClient().put("/analytics/" + hoglin.serverKey())
+                            .body(hoglin.objectMapper().writeValueAsBytes(events))
+                            .asString();
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException(e);
+                    }
+                }, hoglin.executor()
         ).thenAccept(response -> {
             if (response.isSuccess()) return;
             if (hoglin.requeueFailedFlushes()) {
@@ -45,6 +52,9 @@ public class AnalyticBatchTask implements Runnable {
             } else {
                 logger.error("Failed to flush {} queued events: {}", take, hoglin.constructErrorDescription(response));
             }
+        }).exceptionally(e -> {
+            logger.error("Failed to flush {} queued events, serialization failure, will not requeue: {}", take, e.getMessage(), e);
+            return null;
         });
     }
 }

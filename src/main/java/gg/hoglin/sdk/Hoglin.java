@@ -1,8 +1,13 @@
 package gg.hoglin.sdk;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import gg.hoglin.sdk.models.analytic.Analytic;
 import gg.hoglin.sdk.models.analytic.NamedAnalytic;
 import gg.hoglin.sdk.models.analytic.RecordedAnalytic;
@@ -11,7 +16,8 @@ import gg.hoglin.sdk.models.experiment.ExperimentData;
 import gg.hoglin.sdk.models.experiment.ExperimentEvaluationResponse;
 import gg.hoglin.sdk.models.visualization.ImportedSnapshotEvaluation;
 import gg.hoglin.sdk.models.visualization.SnapshotImport;
-import gg.hoglin.sdk.serialization.HoglinAdapter;
+import gg.hoglin.sdk.serialization.InstantDeserializer;
+import gg.hoglin.sdk.serialization.InstantSerializer;
 import gg.hoglin.sdk.strategy.HoglinRetryStrategy;
 import gg.hoglin.sdk.task.AnalyticBatchTask;
 import gg.hoglin.sdk.task.ExperimentFetchTask;
@@ -115,10 +121,10 @@ public class Hoglin implements Closeable {
     private UnirestInstance httpClient;
 
     /**
-     * The Gson instance used for serialization and deserialization
+     * The Jackson instance used for serialization and deserialization
      */
     @ToString.Exclude
-    @Builder.Default @NotNull private Gson gson = createDefaultGson();
+    @Builder.Default @NotNull private ObjectMapper objectMapper = createDefaultObjectMapper();
 
     /**
      * The event queue for storing recorded analytics before they are sent to the Hoglin API
@@ -202,7 +208,13 @@ public class Hoglin implements Closeable {
             logger.error("Failed to refresh experiment cache: {}", response.getBody());
         }
 
-        final ExperimentData[] experiments = gson.fromJson(response.getBody(), ExperimentData[].class);
+        final ExperimentData[] experiments;
+        try {
+            experiments = objectMapper.readValue(response.getBody(), ExperimentData[].class);
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to deserialize experiment payload: {}", response.getBody(), e);
+            return;
+        }
         experimentCache.clear();
 
         for (final ExperimentData experiment : experiments) {
@@ -226,9 +238,19 @@ public class Hoglin implements Closeable {
         final ArrayList<RecordedAnalytic<?>> events = new ArrayList<>(eventQueue);
         eventQueue.clear();
 
-        final HttpResponse<String> response = httpClient.put("/analytics/" + serverKey)
-            .body(gson.toJson(events))
-            .asString();
+        final HttpResponse<String> response;
+        try {
+            response = httpClient.put("/analytics/" + serverKey)
+                .body(objectMapper.writeValueAsBytes(events))
+                .asString();
+        } catch (JsonProcessingException e) {
+            // If you're a developer making custom events, and this gets thrown, it means your custom tracked analytics are invalid.
+            // Chances are, you may be using types that don't have built in serialization,
+            // and if that is the case, just write a custom serializer and register it with the Jackson ObjectMapper instance under the Hoglin loader.
+            // Thank you for your attention to this matter :)
+            logger.error("Failed to serialize tracked events", e);
+            return null;
+        }
 
         if (requeueFailedFlushes && !response.isSuccess()) {
             trackMany(events);
@@ -328,8 +350,14 @@ public class Hoglin implements Closeable {
             throw new IllegalStateException("Attempted to import visualization snapshot whilst closed");
         }
 
-        final RequestBodyEntity request = httpClient.post("/visualizations/" + serverKey + "/import")
-            .body(gson.toJson(new SnapshotImport(snapshotId, name, preventDuplicate)));
+        final RequestBodyEntity request;
+        try {
+            request = httpClient.post("/visualizations/" + serverKey + "/import")
+                .body(objectMapper.writeValueAsBytes(new SnapshotImport(snapshotId, name, preventDuplicate)));
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to serialize snapshot", e);
+            throw new RuntimeException("Snapshot failed to serialize, this should never happen, so there is something very wrong in the code");
+        }
 
         return request.asString();
     }
@@ -419,7 +447,12 @@ public class Hoglin implements Closeable {
             return new ImportedSnapshotEvaluation(false, null);
         }
 
-        return gson.fromJson(response.getBody(), ImportedSnapshotEvaluation.class);
+        try {
+            return objectMapper.readValue(response.getBody(), ImportedSnapshotEvaluation.class);
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to deserialize snapshot payload: {}", response.getBody(), e);
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -496,7 +529,14 @@ public class Hoglin implements Closeable {
             logger.error("Failed to evaluate experiment {} for player {}: {}", experimentId, playerUUID, constructErrorDescription(response));
             return false;
         }
-        ExperimentEvaluationResponse expEvalResp = gson.fromJson(response.getBody(), ExperimentEvaluationResponse.class);
+
+        ExperimentEvaluationResponse expEvalResp;
+        try {
+            expEvalResp = objectMapper.readValue(response.getBody(), ExperimentEvaluationResponse.class);
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to deserialize payload for experiment {} for player {}: {}", experimentId, experimentId, response.getBody(), e);
+            return false;
+        }
 
         // Add to cache
         Map<String, Boolean> map = participationCache.computeIfAbsent(playerUUID, k -> new ConcurrentHashMap<>());
@@ -555,23 +595,24 @@ public class Hoglin implements Closeable {
     public String constructErrorDescription(final HttpResponse<String> response) {
         final String httpStatus = "(HTTP " + response.getStatus()+ "): ";
         try {
-            final ApiErrorResponse error = gson.fromJson(response.getBody(), ApiErrorResponse.class);
+            final ApiErrorResponse error = objectMapper.readValue(response.getBody(), ApiErrorResponse.class);
             return httpStatus + error.parsedDescription();
-        } catch (final JsonSyntaxException e) {
+        } catch (final JacksonException e) {
             return httpStatus + "Received unstructured error response: " + response.getBody();
         } catch (final Exception e) {
             return httpStatus + "An unexpected error occurred while processing the response: " + response.getBody() + " e: " + e.getMessage();
         }
     }
 
-    @SuppressWarnings("rawtypes")
-    private static Gson createDefaultGson() {
-        final GsonBuilder builder = new GsonBuilder();
-        final ServiceLoader<HoglinAdapter> adapters = ServiceLoader.load(HoglinAdapter.class, Hoglin.class.getClassLoader());
-        for (final HoglinAdapter adapter : adapters) {
-            builder.registerTypeAdapter(adapter.getType(), adapter);
-        }
-        return builder.create();
+    private static ObjectMapper createDefaultObjectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper().setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
+
+        SimpleModule module = new SimpleModule();
+        module.addSerializer(Instant.class, new InstantSerializer());
+        module.addDeserializer(Instant.class, new InstantDeserializer());
+        objectMapper.registerModule(module);
+
+        return objectMapper;
     }
 
     private static UnirestInstance createDefaultHttpClient(final String baseUrl) {
@@ -625,6 +666,24 @@ public class Hoglin implements Closeable {
         }
 
         private HoglinBuilder autoFlushTask(final ScheduledFuture<?> autoFlushTask) {
+            return this;
+        }
+
+        /**
+         * Helper for adding custom serializers to the Jackson instance.
+         * The idea is that people are incentivized to not use a custom Jackson instance.
+         *
+         * @param serializer Object serializer
+         * @param deserializer Object deserializer
+         * @return This instance
+         * @param <T> Class type
+         */
+        public <T> HoglinBuilder addCustomSerializer(JsonSerializer<T> serializer, JsonDeserializer<T> deserializer) {
+            SimpleModule module = new SimpleModule();
+            module.addSerializer(serializer);
+            module.addDeserializer(serializer.handledType(), deserializer);
+
+            this.objectMapper$value.registerModule(module);
             return this;
         }
     }
