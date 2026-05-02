@@ -1,6 +1,6 @@
 package gg.hoglin.sdk.models.experiment;
 
-import com.google.gson.annotations.SerializedName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import gg.hoglin.sdk.Hoglin;
 import lombok.Data;
 import org.apache.commons.codec.digest.MurmurHash3;
@@ -21,14 +21,14 @@ public class ExperimentData {
 
     /** Experiment triggers */
     public enum Trigger {
-        @SerializedName("join")
+        @JsonProperty("join")
         JOIN,
-        @SerializedName("first_join")
+        @JsonProperty("first_join")
         FIRST_JOIN,
-        @SerializedName("purchase")
+        @JsonProperty("purchase")
         PURCHASE,
         // This type is not yet implemented on the API side
-        @SerializedName("custom")
+        @JsonProperty("custom")
         CUSTOM,
     }
 
@@ -42,17 +42,17 @@ public class ExperimentData {
 
     /** The date this experiment was created */
     @NotNull
-    @SerializedName("created_at")
+    @JsonProperty("created_at")
     private final Instant createdAt;
 
     /** The internal numerical ID of the server this experiment is associated with */
     @NotNull
-    @SerializedName("server_id")
+    @JsonProperty("server_id")
     private final Integer serverId;
 
     /** The alphanumerical identifier for this experiment - used when querying */
     @NotNull
-    @SerializedName("experiment_id")
+    @JsonProperty("experiment_id")
     private final String experimentId;
 
     /** A description explaining what this experiment is aimed to accomplish */
@@ -65,7 +65,7 @@ public class ExperimentData {
 
     /** A percentage of users that should get this experiment */
     @NotNull
-    @SerializedName("rollout_percentage")
+    @JsonProperty("rollout_percentage")
     private final Integer rolloutPercentage;
 
     /** An allowlist of UUIDs that have access to this experiment */
@@ -74,12 +74,12 @@ public class ExperimentData {
 
     /** The trigger for the experiment */
     @NotNull
-    @SerializedName("experiment_trigger")
+    @JsonProperty("experiment_trigger")
     private final Trigger trigger;
 
     /** The actions taken for variants of the experiment */
     @NotNull
-    @SerializedName("experiment_variants")
+    @JsonProperty("experiment_variants")
     private final Map<ExperimentVariant.Variant, ExperimentVariant> variants;
 
     /**
