@@ -1,6 +1,6 @@
 package gg.hoglin.sdk.models.experiment;
 
-import com.google.gson.annotations.SerializedName;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import org.jetbrains.annotations.NotNull;
 
@@ -13,9 +13,9 @@ public class ExperimentVariant {
      * The variants of the experiment, which at the moment are only control and exposed (A / B)
      */
     public enum Variant {
-        @SerializedName("control")
+        @JsonProperty("control")
         CONTROL,
-        @SerializedName("exposed")
+        @JsonProperty("exposed")
         EXPOSED,
     }
 
@@ -24,11 +24,11 @@ public class ExperimentVariant {
      * At the moment, the system is designed to have only one action per variant.
      */
     public enum Action {
-        @SerializedName("run_console_command")
+        @JsonProperty("run_console_command")
         RUN_CONSOLE_COMMAND,
-        @SerializedName("run_command_as_player")
+        @JsonProperty("run_command_as_player")
         RUN_COMMAND_AS_PLAYER,
-        @SerializedName("send_message")
+        @JsonProperty("send_message")
         SEND_MESSAGE,
     }
 

@@ -1,6 +1,7 @@
 package gg.hoglin.sdk.models.analytic;
 
-import com.google.gson.annotations.SerializedName;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
@@ -13,7 +14,7 @@ import java.time.Instant;
 @Data
 @Accessors(fluent = true)
 public class RecordedAnalytic<T> {
-    @SerializedName("event_type") private final String eventType;
+    @JsonProperty("event_type") private final String eventType;
     private final Instant timestamp;
     private final T properties;
 }

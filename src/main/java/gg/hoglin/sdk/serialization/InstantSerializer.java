@@ -1,35 +1,20 @@
 package gg.hoglin.sdk.serialization;
 
-import com.google.auto.service.AutoService;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonToken;
-import com.google.gson.stream.JsonWriter;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
 
 import java.io.IOException;
 import java.time.Instant;
 
-@AutoService(HoglinAdapter.class)
-public class InstantSerializer extends HoglinAdapter<Instant> {
+public class InstantSerializer extends JsonSerializer<Instant> {
+
     @Override
-    public void write(final JsonWriter out, final Instant value) throws IOException {
+    public void serialize(Instant value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         if (value == null) {
-            out.nullValue();
+            gen.writeNull();
         } else {
-            out.value(value.toString());
+            gen.writeString(value.toString());
         }
-    }
-
-    @Override
-    public Instant read(final JsonReader reader) throws IOException {
-        if (reader.peek() == JsonToken.NULL) {
-            reader.nextNull();
-            return null;
-        }
-        return Instant.parse(reader.nextString());
-    }
-
-    @Override
-    public Class<?> getType() {
-        return Instant.class;
     }
 }
