@@ -58,7 +58,7 @@ publishing {
     repositories {
         maven {
             name = "Hoglin"
-            url = URI("https://maven.hoglin.gg/releases")
+            url = URI(findProperty("repo.waypoint.url") as String? ?: System.getenv("REPO_URL"))
             credentials {
                 username = findProperty("repo.waypoint.username") as String? ?: System.getenv("REPO_USER")
                 password = findProperty("repo.waypoint.password") as String? ?: System.getenv("REPO_PASS")
