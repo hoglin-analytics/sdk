@@ -24,3 +24,7 @@ jobs:
         with:
           gradle-version: '9.4.0'
           arguments: build
+        env:
+          REPO_URL: ${{ secrets.MAVEN_URL }}
+          REPO_USER: ${{ secrets.MAVEN_USERNAME }}
+          REPO_PASS: ${{ secrets.MAVEN_PASSWORD }}
