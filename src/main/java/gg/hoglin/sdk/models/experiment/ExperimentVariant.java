@@ -2,6 +2,7 @@ package gg.hoglin.sdk.models.experiment;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
+import org.checkerframework.checker.units.qual.A;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.UUID;
@@ -39,6 +40,14 @@ public class ExperimentVariant {
     /** The payload corresponding to the action; at the moment it's a command */
     @NotNull
     private String payload;
+
+    public ExperimentVariant(
+            @JsonProperty("action") @NotNull Action action,
+            @JsonProperty("payload") @NotNull String payload
+    ) {
+        this.action = action;
+        this.payload = payload;
+    }
 
     /** Format the payload, replacing the appropriate placeholders */
     public String formatPayload(String playerName, UUID uuid, Variant variant) {

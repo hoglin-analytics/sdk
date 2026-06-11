@@ -1,5 +1,6 @@
 package gg.hoglin.sdk.models.experiment;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import gg.hoglin.sdk.Hoglin;
 import lombok.Data;
@@ -55,6 +56,16 @@ public class ExperimentData {
     @JsonProperty("experiment_id")
     private final String experimentId;
 
+    /** The internal ID of the visualization linked to this experiment */
+    @NotNull
+    @JsonProperty("visualization_id")
+    private final String visualizationId;
+
+    /** The goal of the experiment */
+    @NotNull
+    @JsonProperty("experiment_goal")
+    private final String goal;
+
     /** A description explaining what this experiment is aimed to accomplish */
     @Nullable
     private final String description;
@@ -81,6 +92,37 @@ public class ExperimentData {
     @NotNull
     @JsonProperty("experiment_variants")
     private final Map<ExperimentVariant.Variant, ExperimentVariant> variants;
+
+    @JsonCreator
+    public ExperimentData(
+            @JsonProperty("id") @NotNull Integer id,
+            @JsonProperty("name") @NotNull String name,
+            @JsonProperty("created_at") @NotNull Instant createdAt,
+            @JsonProperty("server_id") @NotNull Integer serverId,
+            @JsonProperty("experiment_id") @NotNull String experimentId,
+            @JsonProperty("visualization_id") @NotNull String visualizationId,
+            @JsonProperty("experiment_goal") @NotNull String goal,
+            @JsonProperty("description") @Nullable String description,
+            @JsonProperty("enabled") @NotNull Boolean enabled,
+            @JsonProperty("rollout_percentage") @NotNull Integer rolloutPercentage,
+            @JsonProperty("allowlist") @NotNull List<UUID> allowlist,
+            @JsonProperty("experiment_trigger") @NotNull Trigger trigger,
+            @JsonProperty("experiment_variants") @NotNull Map<ExperimentVariant.Variant, ExperimentVariant> variants
+    ) {
+        this.id = id;
+        this.name = name;
+        this.createdAt = createdAt;
+        this.serverId = serverId;
+        this.experimentId = experimentId;
+        this.visualizationId = visualizationId;
+        this.goal = goal;
+        this.description = description;
+        this.enabled = enabled;
+        this.rolloutPercentage = rolloutPercentage;
+        this.allowlist = allowlist;
+        this.trigger = trigger;
+        this.variants = variants;
+    }
 
     /**
      * Evaluates whether the specified experiment is currently enabled for this instance. This is a non-player-specific
