@@ -1,5 +1,7 @@
 package gg.hoglin.sdk.models.experiment;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import org.jetbrains.annotations.NotNull;
 
@@ -15,4 +17,13 @@ public class ExperimentEvaluationResponse {
     /** The UUID of the player */
     @NotNull
     private UUID uuid;
+
+    @JsonCreator
+    public ExperimentEvaluationResponse(
+            @JsonProperty("inExperiment") @NotNull Boolean inExperiment,
+            @JsonProperty("uuid") @NotNull UUID uuid
+    ) {
+        this.inExperiment = inExperiment;
+        this.uuid = uuid;
+    }
 }
